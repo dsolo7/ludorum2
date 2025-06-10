@@ -933,5 +933,3 @@ const PageBuilder: React.FC = () => {
 };
 
 export default PageBuilder;
-
-export default PageBuilder
