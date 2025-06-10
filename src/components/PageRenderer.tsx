@@ -3,7 +3,6 @@ import { useParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { Loader2, Sparkles } from 'lucide-react';
 import AffiliateAdCard from './AffiliateAdCard';
-import { useState, useEffect } from 'react';
 import AnalyzerDemo from './AnalyzerDemo';
 import UserAchievements from './UserAchievements';
 import { useAds } from '../hooks/useAds';
@@ -41,19 +40,14 @@ const PageRenderer: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [showConfetti, setShowConfetti] = useState(false);
   const [analyticsTracked, setAnalyticsTracked] = useState(false);
-  const [user, setUser] = useState<any>(null);
-  const [userTokens, setUserTokens] = useState<number>(0);
-  const [usedAnalyzers, setUsedAnalyzers] = useState<Set<string>>(new Set());
-  const [joinedContests, setJoinedContests] = useState<Set<string>>(new Set());
   
   const { ads, trackClick } = useAds();
 
   useEffect(() => {
     if (slug) {
       fetchPage(slug);
-      fetchUserData();
     }
-  }, [slug]); 
+  }, [slug]);
 
   useEffect(() => {
     // Check for confetti animation blocks
@@ -68,49 +62,6 @@ const PageRenderer: React.FC = () => {
       trackPageView();
     }
   }, [page, blocks]);
-
-  const fetchUserData = async () => {
-    try {
-      // Get current user
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-      
-      setUser(user);
-      
-      // Get user tokens
-      const { data: tokens } = await supabase
-        .from('user_tokens')
-        .select('balance')
-        .eq('user_id', user.id)
-        .single();
-      
-      if (tokens) {
-        setUserTokens(tokens.balance);
-      }
-      
-      // Get analyzers the user has used
-      const { data: analyzers } = await supabase
-        .from('analyzer_requests')
-        .select('model_id')
-        .eq('user_id', user.id);
-      
-      if (analyzers && analyzers.length > 0) {
-        setUsedAnalyzers(new Set(analyzers.map(a => a.model_id)));
-      }
-      
-      // Get contests the user has joined
-      const { data: contests } = await supabase
-        .from('contest_entries')
-        .select('contest_id')
-        .eq('user_id', user.id);
-      
-      if (contests && contests.length > 0) {
-        setJoinedContests(new Set(contests.map(c => c.contest_id)));
-      }
-    } catch (error) {
-      console.error('Error fetching user data:', error);
-    }
-  };
 
   const fetchPage = async (pageSlug: string) => {
     try {
@@ -149,38 +100,6 @@ const PageRenderer: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
-
-  const checkVisibility = (block: UIBlock): boolean => {
-    // If no visibility rules, always show the block
-    if (!block.visibility_rules || Object.keys(block.visibility_rules).length === 0) {
-      return true;
-    }
-    
-    const rules = block.visibility_rules;
-    
-    // Check if user needs to be logged in
-    if (rules.loggedIn === true && !user) {
-      return false;
-    }
-    
-    // Check minimum tokens requirement
-    if (rules.minTokens !== undefined && userTokens < rules.minTokens) {
-      return false;
-    }
-    
-    // Check if user has used a specific analyzer
-    if (rules.has_used_analyzer && !usedAnalyzers.has(rules.has_used_analyzer)) {
-      return false;
-    }
-    
-    // Check if user has joined a specific contest
-    if (rules.joined_contest && !joinedContests.has(rules.joined_contest)) {
-      return false;
-    }
-    
-    // All checks passed
-    return true;
   };
 
   const trackPageView = async () => {
@@ -391,84 +310,75 @@ const PageRenderer: React.FC = () => {
       <UserDashboardHeader />
       <ConfettiAnimation isActive={showConfetti} />
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="space-y-8">
-          {blocks.map((block) => {
-            // Check visibility rules
-            if (!checkVisibility(block)) {
-              return null; // Skip this block if it doesn't meet visibility rules
-            }
-            
-            return block.layout_mode === 'standard' ? (
-              <div key={block.id} className="bg-white dark:bg-gray-800 shadow-sm rounded-lg overflow-hidden">
-                {renderBlock(block)}
-              </div>
-            ) : (
-              <div key={block.id} className="bg-white dark:bg-gray-800 shadow-sm rounded-lg overflow-hidden p-6">
-                <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-4 flex items-center">{block.title} {block.animation === 'confetti' && <Sparkles className="ml-2 h-5 w-5 text-yellow-500" />}</h3>
-                {block.description && (
-                  <p className="text-gray-600 dark:text-gray-300 mb-4">{block.description}</p>
-                )}
-                <div className={renderBlock(block).props.className.replace('p-6 rounded-lg', '')}>
-                  {/* Render content based on layout mode */}
-                  {block.layout_mode === 'carousel' && (
-                    <div className="flex space-x-4 overflow-x-auto pb-4">
-                      {Array.from({ length: 5 }).map((_, i) => (
-                        <div key={i} className="flex-shrink-0 w-64 bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
-                          <h4 className="font-medium text-gray-900 dark:text-white">Item {i + 1}</h4>
-                          <p className="text-sm text-gray-500 dark:text-gray-400">Sample carousel item</p>
-                        </div>
-                      ))}
+      <div className="space-y-8">
+        {blocks.map((block) => block.layout_mode === 'standard' ? (
+          <div key={block.id} className="bg-white dark:bg-gray-800 shadow-sm rounded-lg overflow-hidden">
+            {renderBlock(block)}
+          </div>
+        ) : (
+          <div key={block.id} className="bg-white dark:bg-gray-800 shadow-sm rounded-lg overflow-hidden p-6">
+            <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-4 flex items-center">{block.title} {block.animation === 'confetti' && <Sparkles className="ml-2 h-5 w-5 text-yellow-500" />}</h3>
+            {block.description && (
+              <p className="text-gray-600 dark:text-gray-300 mb-4">{block.description}</p>
+            )}
+            <div className={renderBlock(block).props.className.replace('p-6 rounded-lg', '')}>
+              {/* Render content based on layout mode */}
+              {block.layout_mode === 'carousel' && (
+                <div className="flex space-x-4 overflow-x-auto pb-4">
+                  {Array.from({ length: 5 }).map((_, i) => (
+                    <div key={i} className="flex-shrink-0 w-64 bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
+                      <h4 className="font-medium text-gray-900 dark:text-white">Item {i + 1}</h4>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">Sample carousel item</p>
                     </div>
-                  )}
-                  
-                  {block.layout_mode === 'horizontal-scroll' && (
-                    <div className="flex space-x-4 overflow-x-auto pb-4">
-                      {Array.from({ length: 5 }).map((_, i) => (
-                        <div key={i} className="flex-shrink-0 w-64 bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
-                          <h4 className="font-medium text-gray-900 dark:text-white">Item {i + 1}</h4>
-                          <p className="text-sm text-gray-500 dark:text-gray-400">Sample scroll item</p>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  
-                  {block.layout_mode === 'grid' && (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                      {Array.from({ length: 6 }).map((_, i) => (
-                        <div key={i} className="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
-                          <h4 className="font-medium text-gray-900 dark:text-white">Item {i + 1}</h4>
-                          <p className="text-sm text-gray-500 dark:text-gray-400">Sample grid item</p>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  
-                  {block.layout_mode === 'stacked' && (
-                    <div className="space-y-4">
-                      {Array.from({ length: 3 }).map((_, i) => (
-                        <div key={i} className="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
-                          <h4 className="font-medium text-gray-900 dark:text-white">Card {i + 1}</h4>
-                          <p className="text-sm text-gray-500 dark:text-gray-400">Sample stacked card</p>
-                        </div>
-                      ))}
-                    </div>
-                  )}
+                  ))}
                 </div>
-              </div>
-            );
-          })}
-          
-          {blocks.length === 0 || blocks.every(block => !checkVisibility(block)) ? (
-            <div className="bg-white dark:bg-gray-800 shadow-sm rounded-lg p-12 text-center">
-              <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">No Content Available</h3>
-              <p className="text-gray-600 dark:text-gray-300">
-                {blocks.length === 0 
-                  ? "This page has no content blocks. Please check back later."
-                  : "You don't have access to the content on this page. You may need more tokens or to complete certain actions."}
-              </p>
+              )}
+              
+              {block.layout_mode === 'horizontal-scroll' && (
+                <div className="flex space-x-4 overflow-x-auto pb-4">
+                  {Array.from({ length: 5 }).map((_, i) => (
+                    <div key={i} className="flex-shrink-0 w-64 bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
+                      <h4 className="font-medium text-gray-900 dark:text-white">Item {i + 1}</h4>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">Sample scroll item</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+              
+              {block.layout_mode === 'grid' && (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {Array.from({ length: 6 }).map((_, i) => (
+                    <div key={i} className="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
+                      <h4 className="font-medium text-gray-900 dark:text-white">Item {i + 1}</h4>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">Sample grid item</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+              
+              {block.layout_mode === 'stacked' && (
+                <div className="space-y-4">
+                  {Array.from({ length: 3 }).map((_, i) => (
+                    <div key={i} className="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
+                      <h4 className="font-medium text-gray-900 dark:text-white">Card {i + 1}</h4>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">Sample stacked card</p>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
-          ) : null}
-        </div>
+          </div>
+        ))}
+        
+        {blocks.length === 0 && (
+          <div className="bg-white dark:bg-gray-800 shadow-sm rounded-lg p-12 text-center">
+            <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">No Content Yet</h3>
+            <p className="text-gray-600 dark:text-gray-300">
+              This page has no content blocks. Please check back later.
+            </p>
+          </div>
+        )}
+      </div>
       </div>
     </div>
   );
