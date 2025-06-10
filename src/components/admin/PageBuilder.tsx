@@ -15,6 +15,21 @@ import {
   Settings,
   Copy
 } from 'lucide-react';
+import {
+  Download,
+  Upload,
+  Sparkles,
+  Palette,
+  BarChart3,
+  FileJson,
+  Repeat,
+  Smartphone,
+  Laptop,
+  Grid,
+  Rows,
+  Columns,
+  Scroll
+} from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 
 interface PageLayout {
@@ -39,6 +54,9 @@ interface UIBlock {
   position: number;
   background_color: string | null;
   visibility_rules: any;
+  animation: string | null;
+  layout_mode: string | null;
+  analytics: any;
 }
 
 const PageBuilder: React.FC = () => {
@@ -63,8 +81,17 @@ const PageBuilder: React.FC = () => {
     block_type: 'text' as UIBlock['block_type'],
     content: '{}',
     background_color: '',
-    visibility_rules: '{}'
+    visibility_rules: '{}',
+    animation: '',
+    layout_mode: 'standard'
   });
+  const [analyticsData, setAnalyticsData] = useState<Record<string, any>>({});
+  const [exportData, setExportData] = useState<string>('');
+  const [importData, setImportData] = useState<string>('');
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [showAnalyticsModal, setShowAnalyticsModal] = useState(false);
+  const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null);
 
   useEffect(() => {
     fetchPages();
@@ -73,6 +100,12 @@ const PageBuilder: React.FC = () => {
   useEffect(() => {
     if (selectedPage) {
       fetchBlocks(selectedPage.id);
+    }
+  }, [selectedPage]);
+  
+  useEffect(() => {
+    if (selectedPage) {
+      fetchAnalytics(selectedPage.id);
     }
   }, [selectedPage]);
 
@@ -105,6 +138,42 @@ const PageBuilder: React.FC = () => {
       setBlocks(data || []);
     } catch (error) {
       console.error('Error fetching blocks:', error);
+    }
+  };
+
+  const fetchAnalytics = async (pageId: string) => {
+    try {
+      // In a real implementation, this would fetch actual analytics data
+      // For now, we'll generate mock data
+      const mockAnalytics: Record<string, any> = {};
+      
+      // Generate mock data for each block
+      blocks.forEach(block => {
+        mockAnalytics[block.id] = {
+          views: Math.floor(Math.random() * 1000) + 100,
+          interactions: Math.floor(Math.random() * 500) + 50,
+          tokens_spent: block.block_type === 'analyzer' ? Math.floor(Math.random() * 2000) + 200 : 0,
+          conversion_rate: Math.random() * 0.2 + 0.05,
+          last_30_days: Array.from({ length: 30 }, () => Math.floor(Math.random() * 100))
+        };
+      });
+      
+      // Page-level analytics
+      mockAnalytics['page'] = {
+        total_views: Math.floor(Math.random() * 5000) + 1000,
+        unique_visitors: Math.floor(Math.random() * 2000) + 500,
+        avg_time_on_page: Math.floor(Math.random() * 180) + 60,
+        bounce_rate: Math.random() * 0.4 + 0.2,
+        devices: {
+          mobile: Math.floor(Math.random() * 60) + 20,
+          desktop: Math.floor(Math.random() * 40) + 10,
+          tablet: Math.floor(Math.random() * 20) + 5
+        }
+      };
+      
+      setAnalyticsData(mockAnalytics);
+    } catch (error) {
+      console.error('Error fetching analytics:', error);
     }
   };
 
@@ -147,7 +216,9 @@ const PageBuilder: React.FC = () => {
       block_type: 'text',
       content: '{}',
       background_color: '',
-      visibility_rules: '{}'
+      visibility_rules: '{}',
+      animation: '',
+      layout_mode: 'standard'
     });
     setEditingBlock(null);
     setIsBlockFormOpen(false);
@@ -217,7 +288,9 @@ const PageBuilder: React.FC = () => {
         content,
         background_color: blockFormData.background_color || null,
         visibility_rules: visibilityRules,
-        position: editingBlock ? editingBlock.position : blocks.length
+        position: editingBlock ? editingBlock.position : blocks.length,
+        animation: blockFormData.animation || null,
+        layout_mode: blockFormData.layout_mode || 'standard'
       };
 
       if (editingBlock) {
@@ -262,7 +335,9 @@ const PageBuilder: React.FC = () => {
       block_type: block.block_type,
       content: typeof block.content === 'string' ? block.content : JSON.stringify(block.content, null, 2),
       background_color: block.background_color || '',
-      visibility_rules: typeof block.visibility_rules === 'string' ? block.visibility_rules : JSON.stringify(block.visibility_rules, null, 2)
+      visibility_rules: typeof block.visibility_rules === 'string' ? block.visibility_rules : JSON.stringify(block.visibility_rules, null, 2),
+      animation: block.animation || '',
+      layout_mode: block.layout_mode || 'standard'
     });
     setEditingBlock(block);
     setIsBlockFormOpen(true);
@@ -414,6 +489,141 @@ const PageBuilder: React.FC = () => {
     } catch (error) {
       console.error('Error duplicating block:', error);
       alert('Error duplicating block');
+    }
+  };
+
+  const exportPageData = () => {
+    if (!selectedPage) return;
+    
+    const exportObj = {
+      page: selectedPage,
+      blocks: blocks
+    };
+    
+    setExportData(JSON.stringify(exportObj, null, 2));
+    setShowExportModal(true);
+  };
+
+  const importPageData = async () => {
+    try {
+      const importObj = JSON.parse(importData);
+      
+      if (!importObj.page || !importObj.blocks) {
+        throw new Error('Invalid import data format');
+      }
+      
+      // Check if page exists
+      const { data: existingPage } = await supabase
+        .from('page_layouts')
+        .select('id')
+        .eq('slug', importObj.page.slug)
+        .single();
+      
+      let pageId;
+      
+      if (existingPage) {
+        // Update existing page
+        const { error: updateError } = await supabase
+          .from('page_layouts')
+          .update({
+            name: importObj.page.name,
+            description: importObj.page.description,
+            is_published: importObj.page.is_published,
+            metadata: importObj.page.metadata
+          })
+          .eq('id', existingPage.id);
+          
+        if (updateError) throw updateError;
+        pageId = existingPage.id;
+        
+        // Delete existing blocks
+        await supabase
+          .from('ui_blocks')
+          .delete()
+          .eq('page_id', pageId);
+      } else {
+        // Create new page
+        const { data: newPage, error: insertError } = await supabase
+          .from('page_layouts')
+          .insert([{
+            name: importObj.page.name,
+            slug: importObj.page.slug,
+            description: importObj.page.description,
+            is_published: importObj.page.is_published,
+            metadata: importObj.page.metadata
+          }])
+          .select()
+          .single();
+          
+        if (insertError) throw insertError;
+        pageId = newPage.id;
+      }
+      
+      // Insert blocks
+      for (const block of importObj.blocks) {
+        await supabase
+          .from('ui_blocks')
+          .insert([{
+            page_id: pageId,
+            title: block.title,
+            description: block.description,
+            block_type: block.block_type,
+            content: block.content,
+            position: block.position,
+            background_color: block.background_color,
+            visibility_rules: block.visibility_rules,
+            animation: block.animation,
+            layout_mode: block.layout_mode
+          }]);
+      }
+      
+      // Refresh data
+      await fetchPages();
+      setShowImportModal(false);
+      
+      // Select the imported page
+      const { data: importedPage } = await supabase
+        .from('page_layouts')
+        .select('*')
+        .eq('slug', importObj.page.slug)
+        .single();
+        
+      if (importedPage) {
+        setSelectedPage(importedPage);
+      }
+      
+      alert('Page imported successfully!');
+    } catch (error) {
+      console.error('Error importing page:', error);
+      alert('Error importing page: ' + (error instanceof Error ? error.message : 'Invalid format'));
+    }
+  };
+
+  const getAnimationIcon = (animation: string | null) => {
+    switch (animation) {
+      case 'confetti': return <Sparkles className="h-4 w-4 text-yellow-500" />;
+      case 'fade': return <Sparkles className="h-4 w-4 text-blue-500" />;
+      case 'slide': return <Sparkles className="h-4 w-4 text-green-500" />;
+      case 'bounce': return <Sparkles className="h-4 w-4 text-purple-500" />;
+      default: return null;
+    }
+  };
+
+  const getLayoutModeIcon = (layoutMode: string | null) => {
+    switch (layoutMode) {
+      case 'carousel': return <Repeat className="h-4 w-4 text-blue-500" />;
+      case 'horizontal-scroll': return <Scroll className="h-4 w-4 text-green-500" />;
+      case 'grid': return <Grid className="h-4 w-4 text-purple-500" />;
+      case 'stacked': return <Rows className="h-4 w-4 text-orange-500" />;
+      default: return <Columns className="h-4 w-4 text-gray-500" />;
+    }
+  };
+
+  const getDeviceIcon = (device: string) => {
+    switch (device) {
+      case 'mobile': return <Smartphone className="h-4 w-4 text-gray-500" />;
+      case 'desktop': return <Laptop className="h-4 w-4 text-gray-500" />;
+      default: return null;
     }
   };
 
@@ -602,369 +812,4 @@ const PageBuilder: React.FC = () => {
                           {page.is_published ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
                         </button>
                         <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleEditPage(page);
-                          }}
-                          className="p-1 text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300"
-                          title="Edit Page"
-                        >
-                          <Pencil className="h-4 w-4" />
-                        </button>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleDeletePage(page.id);
-                          }}
-                          className="p-1 text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300"
-                          title="Delete Page"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      </div>
-                    </div>
-                    {page.description && (
-                      <p className="mt-1 text-xs text-gray-600 dark:text-gray-300">
-                        {page.description}
-                      </p>
-                    )}
-                    <div className="mt-2 flex items-center">
-                      <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
-                        page.is_published
-                          ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
-                          : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
-                      }`}>
-                        {page.is_published ? 'Published' : 'Draft'}
-                      </span>
-                      <span className="ml-2 text-xs text-gray-500 dark:text-gray-400">
-                        Updated: {new Date(page.updated_at).toLocaleDateString()}
-                      </span>
-                    </div>
-                  </div>
-                ))}
-
-                {pages.length === 0 && (
-                  <div className="text-center py-4">
-                    <p className="text-gray-500 dark:text-gray-400">
-                      No pages created yet. Click "Create Page" to get started.
-                    </p>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Blocks Panel */}
-        <div className="lg:col-span-2">
-          {selectedPage ? (
-            <div className="space-y-6">
-              {/* Page Header */}
-              <div className="bg-white dark:bg-gray-800 shadow sm:rounded-lg">
-                <div className="px-4 py-5 sm:p-6">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h3 className="text-lg leading-6 font-medium text-gray-900 dark:text-white">
-                        {selectedPage.name}
-                      </h3>
-                      <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                        {selectedPage.description || 'No description'}
-                      </p>
-                    </div>
-                    <div className="flex items-center space-x-3">
-                      <a
-                        href={`/pages/${selectedPage.slug}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center px-3 py-1.5 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-600"
-                      >
-                        <Globe className="h-4 w-4 mr-2" />
-                        View Page
-                      </a>
-                      <button
-                        onClick={() => setIsBlockFormOpen(true)}
-                        className="inline-flex items-center px-3 py-1.5 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                      >
-                        <Plus className="h-4 w-4 mr-2" />
-                        Add Block
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Block Form */}
-              {isBlockFormOpen && (
-                <div className="bg-white dark:bg-gray-800 shadow sm:rounded-lg">
-                  <form onSubmit={handleBlockSubmit} className="p-6">
-                    <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
-                      <div className="sm:col-span-2">
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                          Block Title *
-                        </label>
-                        <input
-                          type="text"
-                          name="title"
-                          value={blockFormData.title}
-                          onChange={handleBlockInputChange}
-                          required
-                          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white sm:text-sm py-2.5"
-                          placeholder="e.g., NFL Analyzer"
-                        />
-                      </div>
-
-                      <div className="sm:col-span-2">
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                          Description
-                        </label>
-                        <textarea
-                          name="description"
-                          value={blockFormData.description}
-                          onChange={handleBlockInputChange}
-                          rows={2}
-                          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white sm:text-sm"
-                          placeholder="Block description (optional)"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                          Block Type *
-                        </label>
-                        <select
-                          name="block_type"
-                          value={blockFormData.block_type}
-                          onChange={handleBlockInputChange}
-                          required
-                          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white sm:text-sm py-2.5"
-                        >
-                          <option value="analyzer">Analyzer</option>
-                          <option value="contest">Contest</option>
-                          <option value="leaderboard">Leaderboard</option>
-                          <option value="ad">Ad</option>
-                          <option value="text">Text</option>
-                          <option value="custom">Custom</option>
-                        </select>
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                          Background Color
-                        </label>
-                        <input
-                          type="text"
-                          name="background_color"
-                          value={blockFormData.background_color}
-                          onChange={handleBlockInputChange}
-                          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white sm:text-sm py-2.5"
-                          placeholder="#f0f9ff or rgba(240, 249, 255, 0.5)"
-                        />
-                      </div>
-
-                      <div className="sm:col-span-2">
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                          Content (JSON)
-                        </label>
-                        <textarea
-                          name="content"
-                          value={blockFormData.content}
-                          onChange={handleBlockInputChange}
-                          rows={5}
-                          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white sm:text-sm font-mono"
-                          placeholder={`{
-  "text": "Welcome to Sports Genius!",
-  "textSize": "large"
-}`}
-                        />
-                        <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                          Content structure depends on block type
-                        </p>
-                      </div>
-
-                      <div className="sm:col-span-2">
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                          Visibility Rules (JSON)
-                        </label>
-                        <textarea
-                          name="visibility_rules"
-                          value={blockFormData.visibility_rules}
-                          onChange={handleBlockInputChange}
-                          rows={3}
-                          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white sm:text-sm font-mono"
-                          placeholder={`{
-  "loggedIn": true,
-  "minTokens": 10
-}`}
-                        />
-                      </div>
-                    </div>
-
-                    <div className="mt-6 flex justify-end space-x-3">
-                      <button
-                        type="button"
-                        onClick={resetBlockForm}
-                        className="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-600"
-                      >
-                        <X className="h-4 w-4 mr-2" />
-                        Cancel
-                      </button>
-                      <button
-                        type="submit"
-                        className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                      >
-                        <Save className="h-4 w-4 mr-2" />
-                        {editingBlock ? 'Update' : 'Add'} Block
-                      </button>
-                    </div>
-                  </form>
-                </div>
-              )}
-
-              {/* Blocks List */}
-              <div className="bg-white dark:bg-gray-800 shadow sm:rounded-lg">
-                <div className="px-4 py-5 sm:p-6">
-                  <h3 className="text-lg leading-6 font-medium text-gray-900 dark:text-white mb-4">
-                    Page Blocks
-                  </h3>
-                  
-                  <div className="space-y-4">
-                    {blocks.map((block, index) => (
-                      <div
-                        key={block.id}
-                        className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 hover:shadow-sm transition-shadow"
-                      >
-                        <div className="flex items-start justify-between">
-                          <div className="flex items-center">
-                            {getBlockTypeIcon(block.block_type)}
-                            <div className="ml-3">
-                              <h4 className="text-sm font-medium text-gray-900 dark:text-white">
-                                {block.title}
-                              </h4>
-                              <p className="text-xs text-gray-500 dark:text-gray-400">
-                                Type: {block.block_type} • Position: {block.position}
-                              </p>
-                            </div>
-                          </div>
-                          <div className="flex space-x-2">
-                            <button
-                              onClick={() => handleMoveBlock(block.id, 'up')}
-                              disabled={index === 0}
-                              className={`p-1 rounded ${
-                                index === 0
-                                  ? 'text-gray-300 dark:text-gray-600 cursor-not-allowed'
-                                  : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'
-                              }`}
-                              title="Move Up"
-                            >
-                              <MoveUp className="h-4 w-4" />
-                            </button>
-                            <button
-                              onClick={() => handleMoveBlock(block.id, 'down')}
-                              disabled={index === blocks.length - 1}
-                              className={`p-1 rounded ${
-                                index === blocks.length - 1
-                                  ? 'text-gray-300 dark:text-gray-600 cursor-not-allowed'
-                                  : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'
-                              }`}
-                              title="Move Down"
-                            >
-                              <MoveDown className="h-4 w-4" />
-                            </button>
-                            <button
-                              onClick={() => duplicateBlock(block)}
-                              className="p-1 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
-                              title="Duplicate"
-                            >
-                              <Copy className="h-4 w-4" />
-                            </button>
-                            <button
-                              onClick={() => handleEditBlock(block)}
-                              className="p-1 text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300"
-                              title="Edit"
-                            >
-                              <Pencil className="h-4 w-4" />
-                            </button>
-                            <button
-                              onClick={() => handleDeleteBlock(block.id)}
-                              className="p-1 text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300"
-                              title="Delete"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </button>
-                          </div>
-                        </div>
-                        
-                        {block.description && (
-                          <p className="mt-2 text-xs text-gray-600 dark:text-gray-300">
-                            {block.description}
-                          </p>
-                        )}
-                        
-                        <div className="mt-3 flex flex-wrap gap-2">
-                          {block.background_color && (
-                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300">
-                              BG: {block.background_color}
-                            </span>
-                          )}
-                          {Object.keys(block.visibility_rules || {}).length > 0 && (
-                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300">
-                              <Settings className="h-3 w-3 mr-1" />
-                              Has Visibility Rules
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-
-                    {blocks.length === 0 && (
-                      <div className="text-center py-8">
-                        <Layers className="mx-auto h-12 w-12 text-gray-400" />
-                        <h3 className="mt-2 text-sm font-medium text-gray-900 dark:text-white">No blocks</h3>
-                        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                          Get started by adding your first block to this page.
-                        </p>
-                        <div className="mt-6">
-                          <button
-                            onClick={() => setIsBlockFormOpen(true)}
-                            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                          >
-                            <Plus className="h-4 w-4 mr-2" />
-                            Add First Block
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div className="bg-white dark:bg-gray-800 shadow sm:rounded-lg">
-              <div className="px-4 py-5 sm:p-6 text-center">
-                <Layout className="mx-auto h-12 w-12 text-gray-400" />
-                <h3 className="mt-2 text-sm font-medium text-gray-900 dark:text-white">No page selected</h3>
-                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                  Select a page from the list or create a new one to get started.
-                </p>
-                <div className="mt-6">
-                  <button
-                    onClick={() => setIsPageFormOpen(true)}
-                    className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                  >
-                    <Plus className="h-4 w-4 mr-2" />
-                    Create New Page
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-};
-
-// Import missing icons
-import { Brain, Trophy, BarChart, MonitorPlay, Type, Code } from 'lucide-react';
-
-export default PageBuilder;
+                

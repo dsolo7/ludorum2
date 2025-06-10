@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Sparkles } from 'lucide-react';
 import AffiliateAdCard from './AffiliateAdCard';
 import AnalyzerDemo from './AnalyzerDemo';
 import UserAchievements from './UserAchievements';
 import { useAds } from '../hooks/useAds';
+import ConfettiAnimation from './ConfettiAnimation';
+import UserDashboardHeader from './UserDashboardHeader';
 
 interface PageLayout {
   id: string;
@@ -26,6 +28,8 @@ interface UIBlock {
   position: number;
   background_color: string | null;
   visibility_rules: any;
+  animation: string | null;
+  layout_mode: string | null;
 }
 
 const PageRenderer: React.FC = () => {
@@ -34,6 +38,8 @@ const PageRenderer: React.FC = () => {
   const [blocks, setBlocks] = useState<UIBlock[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showConfetti, setShowConfetti] = useState(false);
+  const [analyticsTracked, setAnalyticsTracked] = useState(false);
   
   const { ads, trackClick } = useAds();
 
@@ -42,6 +48,20 @@ const PageRenderer: React.FC = () => {
       fetchPage(slug);
     }
   }, [slug]);
+
+  useEffect(() => {
+    // Check for confetti animation blocks
+    const hasConfetti = blocks.some(block => block.animation === 'confetti');
+    if (hasConfetti) {
+      setShowConfetti(true);
+      setTimeout(() => setShowConfetti(false), 3000);
+    }
+    
+    // Track page view analytics
+    if (page && blocks.length > 0 && !analyticsTracked) {
+      trackPageView();
+    }
+  }, [page, blocks]);
 
   const fetchPage = async (pageSlug: string) => {
     try {
@@ -82,6 +102,29 @@ const PageRenderer: React.FC = () => {
     }
   };
 
+  const trackPageView = async () => {
+    try {
+      // In a real implementation, this would track the page view in the database
+      // For now, we'll just log it to the console
+      console.log('Page view tracked:', page?.name);
+      
+      // Mark as tracked to prevent multiple tracking
+      setAnalyticsTracked(true);
+    } catch (error) {
+      console.error('Error tracking page view:', error);
+    }
+  };
+
+  const trackBlockInteraction = async (blockId: string, interactionType: string) => {
+    try {
+      // In a real implementation, this would track the block interaction in the database
+      // For now, we'll just log it to the console
+      console.log('Block interaction tracked:', blockId, interactionType);
+    } catch (error) {
+      console.error('Error tracking block interaction:', error);
+    }
+  };
+
   const renderBlock = (block: UIBlock) => {
     // Check visibility rules
     if (block.visibility_rules && Object.keys(block.visibility_rules).length > 0) {
@@ -93,11 +136,39 @@ const PageRenderer: React.FC = () => {
       backgroundColor: block.background_color || 'transparent'
     };
 
+    // Apply layout mode styles
+    let layoutClass = '';
+    switch (block.layout_mode) {
+      case 'carousel':
+        layoutClass = 'overflow-x-auto whitespace-nowrap pb-4';
+        break;
+      case 'horizontal-scroll':
+        layoutClass = 'overflow-x-auto flex space-x-4 pb-4';
+        break;
+      case 'grid':
+        layoutClass = 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4';
+        break;
+      case 'stacked':
+        layoutClass = 'space-y-4';
+        break;
+      default:
+        layoutClass = '';
+    }
+
+    // Apply animation classes
+    let animationClass = '';
+    switch (block.animation) {
+      case 'fade': animationClass = 'animate-fade-in'; break;
+      case 'slide': animationClass = 'animate-slide-in'; break;
+      case 'bounce': animationClass = 'animate-bounce'; break;
+      default: animationClass = '';
+    }
+
     switch (block.block_type) {
       case 'analyzer':
         return (
-          <div className="p-6 rounded-lg" style={blockStyle}>
-            <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">{block.title}</h3>
+          <div className={`p-6 rounded-lg ${animationClass}`} style={blockStyle} onClick={() => trackBlockInteraction(block.id, 'view')}>
+            <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-4 flex items-center">{block.title} {block.animation === 'confetti' && <Sparkles className="ml-2 h-5 w-5 text-yellow-500" />}</h3>
             {block.description && (
               <p className="text-gray-600 dark:text-gray-300 mb-4">{block.description}</p>
             )}
@@ -107,8 +178,8 @@ const PageRenderer: React.FC = () => {
       
       case 'contest':
         return (
-          <div className="p-6 rounded-lg" style={blockStyle}>
-            <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">{block.title}</h3>
+          <div className={`p-6 rounded-lg ${animationClass}`} style={blockStyle} onClick={() => trackBlockInteraction(block.id, 'view')}>
+            <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-4 flex items-center">{block.title} {block.animation === 'confetti' && <Sparkles className="ml-2 h-5 w-5 text-yellow-500" />}</h3>
             {block.description && (
               <p className="text-gray-600 dark:text-gray-300 mb-4">{block.description}</p>
             )}
@@ -127,8 +198,8 @@ const PageRenderer: React.FC = () => {
       
       case 'leaderboard':
         return (
-          <div className="p-6 rounded-lg" style={blockStyle}>
-            <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">{block.title}</h3>
+          <div className={`p-6 rounded-lg ${animationClass}`} style={blockStyle} onClick={() => trackBlockInteraction(block.id, 'view')}>
+            <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-4 flex items-center">{block.title} {block.animation === 'confetti' && <Sparkles className="ml-2 h-5 w-5 text-yellow-500" />}</h3>
             {block.description && (
               <p className="text-gray-600 dark:text-gray-300 mb-4">{block.description}</p>
             )}
@@ -143,8 +214,8 @@ const PageRenderer: React.FC = () => {
       
       case 'ad':
         return (
-          <div className="p-6 rounded-lg" style={blockStyle}>
-            <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">{block.title}</h3>
+          <div className={`p-6 rounded-lg ${animationClass}`} style={blockStyle} onClick={() => trackBlockInteraction(block.id, 'view')}>
+            <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-4 flex items-center">{block.title} {block.animation === 'confetti' && <Sparkles className="ml-2 h-5 w-5 text-yellow-500" />}</h3>
             {block.description && (
               <p className="text-gray-600 dark:text-gray-300 mb-4">{block.description}</p>
             )}
@@ -180,8 +251,8 @@ const PageRenderer: React.FC = () => {
           'text-base';
         
         return (
-          <div className="p-6 rounded-lg" style={blockStyle}>
-            <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">{block.title}</h3>
+          <div className={`p-6 rounded-lg ${animationClass}`} style={blockStyle} onClick={() => trackBlockInteraction(block.id, 'view')}>
+            <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-4 flex items-center">{block.title} {block.animation === 'confetti' && <Sparkles className="ml-2 h-5 w-5 text-yellow-500" />}</h3>
             <div className={`prose dark:prose-invert max-w-none ${textSizeClass}`}>
               <p>{block.content?.text || 'No text content provided'}</p>
             </div>
@@ -190,8 +261,8 @@ const PageRenderer: React.FC = () => {
       
       case 'custom':
         return (
-          <div className="p-6 rounded-lg" style={blockStyle}>
-            <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">{block.title}</h3>
+          <div className={`p-6 rounded-lg ${animationClass}`} style={blockStyle} onClick={() => trackBlockInteraction(block.id, 'view')}>
+            <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-4 flex items-center">{block.title} {block.animation === 'confetti' && <Sparkles className="ml-2 h-5 w-5 text-yellow-500" />}</h3>
             {block.description && (
               <p className="text-gray-600 dark:text-gray-300 mb-4">{block.description}</p>
             )}
@@ -206,8 +277,8 @@ const PageRenderer: React.FC = () => {
       
       default:
         return (
-          <div className="p-6 rounded-lg" style={blockStyle}>
-            <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">{block.title}</h3>
+          <div className={`p-6 rounded-lg ${animationClass}`} style={blockStyle} onClick={() => trackBlockInteraction(block.id, 'view')}>
+            <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-4 flex items-center">{block.title} {block.animation === 'confetti' && <Sparkles className="ml-2 h-5 w-5 text-yellow-500" />}</h3>
             <p className="text-gray-600 dark:text-gray-300">
               Unknown block type: {block.block_type}
             </p>
@@ -235,11 +306,67 @@ const PageRenderer: React.FC = () => {
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+      <UserDashboardHeader />
+      <ConfettiAnimation isActive={showConfetti} />
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <div className="space-y-8">
-        {blocks.map((block) => (
+        {blocks.map((block) => block.layout_mode === 'standard' ? (
           <div key={block.id} className="bg-white dark:bg-gray-800 shadow-sm rounded-lg overflow-hidden">
             {renderBlock(block)}
+          </div>
+        ) : (
+          <div key={block.id} className="bg-white dark:bg-gray-800 shadow-sm rounded-lg overflow-hidden p-6">
+            <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-4 flex items-center">{block.title} {block.animation === 'confetti' && <Sparkles className="ml-2 h-5 w-5 text-yellow-500" />}</h3>
+            {block.description && (
+              <p className="text-gray-600 dark:text-gray-300 mb-4">{block.description}</p>
+            )}
+            <div className={renderBlock(block).props.className.replace('p-6 rounded-lg', '')}>
+              {/* Render content based on layout mode */}
+              {block.layout_mode === 'carousel' && (
+                <div className="flex space-x-4 overflow-x-auto pb-4">
+                  {Array.from({ length: 5 }).map((_, i) => (
+                    <div key={i} className="flex-shrink-0 w-64 bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
+                      <h4 className="font-medium text-gray-900 dark:text-white">Item {i + 1}</h4>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">Sample carousel item</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+              
+              {block.layout_mode === 'horizontal-scroll' && (
+                <div className="flex space-x-4 overflow-x-auto pb-4">
+                  {Array.from({ length: 5 }).map((_, i) => (
+                    <div key={i} className="flex-shrink-0 w-64 bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
+                      <h4 className="font-medium text-gray-900 dark:text-white">Item {i + 1}</h4>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">Sample scroll item</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+              
+              {block.layout_mode === 'grid' && (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {Array.from({ length: 6 }).map((_, i) => (
+                    <div key={i} className="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
+                      <h4 className="font-medium text-gray-900 dark:text-white">Item {i + 1}</h4>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">Sample grid item</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+              
+              {block.layout_mode === 'stacked' && (
+                <div className="space-y-4">
+                  {Array.from({ length: 3 }).map((_, i) => (
+                    <div key={i} className="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
+                      <h4 className="font-medium text-gray-900 dark:text-white">Card {i + 1}</h4>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">Sample stacked card</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         ))}
         
@@ -251,6 +378,7 @@ const PageRenderer: React.FC = () => {
             </p>
           </div>
         )}
+      </div>
       </div>
     </div>
   );
