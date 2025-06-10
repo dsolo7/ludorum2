@@ -22,6 +22,7 @@ import GamificationOverview from '../components/admin/GamificationOverview';
 import Leaderboard from '../components/admin/Leaderboard';
 import BadgeDefinitions from '../components/admin/BadgeDefinitions';
 import ContestManagement from '../components/admin/ContestManagement';
+import PageBuilder from '../components/admin/PageBuilder';
 
 const AdminDashboard: React.FC = () => {
   return (
@@ -45,6 +46,7 @@ const AdminDashboard: React.FC = () => {
         <Route path="leaderboard" element={<Leaderboard />} />
         <Route path="badge-definitions" element={<BadgeDefinitions />} />
         <Route path="contest-management" element={<ContestManagement />} />
+        <Route path="page-builder" element={<PageBuilder />} />
         <Route path="users" element={<Users />} />
         <Route path="audit-logs" element={<AuditLogs />} />
         <Route path="settings" element={<Settings />} />

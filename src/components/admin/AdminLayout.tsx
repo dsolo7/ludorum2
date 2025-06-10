@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Bot, Users, Settings, ClipboardList, Bell, Menu, X, BookOpen, Gamepad2, MonitorPlay, LineChart, MessageSquareMore, CreditCard, HelpCircle, Brain, Trophy, Megaphone, FileDown, Target, FolderRoot as Football, Wrench, Rss, Coins, UserCheck, Clock, MapPin } from 'lucide-react';
+import { LayoutDashboard, Bot, Users, Settings, ClipboardList, Bell, Menu, X, BookOpen, Gamepad2, MonitorPlay, LineChart, MessageSquareMore, CreditCard, HelpCircle, Brain, Trophy, Megaphone, FileDown, Target, FolderRoot as Football, Wrench, Rss, Coins, UserCheck, Clock, MapPin, Layout } from 'lucide-react';
 
 interface AdminLayoutProps {
   children: React.ReactNode;
@@ -37,6 +37,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
     { name: 'Analyzer', icon: BookOpen, href: '/admin/analyzer' },
     { name: 'Content', icon: MessageSquareMore, href: '/admin/content' },
     { name: 'Gamification', icon: Gamepad2, href: '/admin/gamification' },
+    { name: 'Page Builder', icon: Layout, href: '/admin/page-builder' },
     { name: 'Badge Definitions', icon: Trophy, href: '/admin/badge-definitions' },
     { name: 'Ads', icon: MonitorPlay, href: '/admin/ads' },
     { name: 'Ad Placements', icon: MapPin, href: '/admin/ad-placements' },
