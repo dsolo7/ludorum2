@@ -8,6 +8,7 @@ import NotFound from './pages/NotFound';
 import PageRenderer from './components/PageRenderer';
 import AnalyzerResults from './pages/AnalyzerResults';
 import PrivacyPolicy from './pages/PrivacyPolicy';
+import DynamicPageRenderer from './components/DynamicPageRenderer';
 import TermsOfService from './pages/TermsOfService';
 import CookiePolicy from './pages/CookiePolicy';
 import Login from './pages/Login';
@@ -21,7 +22,7 @@ function App() {
         <Routes>
           <Route path="/" element={<LandingPage />} />
           <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/pages/:slug" element={<PageRenderer />} />
+          <Route path="/pages/:slug" element={<DynamicPageRenderer />} />
           <Route path="/admin/*" element={<AdminDashboard />} />
           <Route path="/analyzer-results" element={<AnalyzerResults />} />
           <Route path="/profile" element={<UserProfile />} />
