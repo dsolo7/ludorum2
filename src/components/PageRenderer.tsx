@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { Loader2, Sparkles } from 'lucide-react';
-import { useEffect, useState } from 'react';
 import AffiliateAdCard from './AffiliateAdCard';
 import AnalyzerDemo from './AnalyzerDemo';
 import UserAchievements from './UserAchievements';
