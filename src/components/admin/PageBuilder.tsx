@@ -13,7 +13,13 @@ import {
   Globe,
   Layers,
   Settings,
-  Copy
+  Copy,
+  Brain,
+  Trophy,
+  BarChart,
+  MonitorPlay,
+  Type,
+  Code
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 
@@ -964,9 +970,4 @@ const PageBuilder: React.FC = () => {
   );
 };
 
-// Import missing icons
-import { Brain, Trophy, BarChart, MonitorPlay, Type, Code } from 'lucide-react';
-
 export default PageBuilder;
-
-export default PageBuilder
