@@ -762,4 +762,176 @@ const PageBuilder: React.FC = () => {
                           name="background_color"
                           value={blockFormData.background_color}
                           onChange={handleBlockInputChange}
-                          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo
+                          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white sm:text-sm py-2.5"
+                          placeholder="e.g., #ffffff or bg-blue-100"
+                        />
+                      </div>
+
+                      <div className="sm:col-span-2">
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                          Content (JSON)
+                        </label>
+                        <textarea
+                          name="content"
+                          value={blockFormData.content}
+                          onChange={handleBlockInputChange}
+                          rows={4}
+                          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white sm:text-sm font-mono"
+                          placeholder='{"text": "Welcome to our site!", "style": "large"}'
+                        />
+                      </div>
+
+                      <div className="sm:col-span-2">
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                          Visibility Rules (JSON)
+                        </label>
+                        <textarea
+                          name="visibility_rules"
+                          value={blockFormData.visibility_rules}
+                          onChange={handleBlockInputChange}
+                          rows={3}
+                          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white sm:text-sm font-mono"
+                          placeholder='{"requireAuth": false, "roles": ["user"]}'
+                        />
+                      </div>
+                    </div>
+
+                    <div className="mt-6 flex justify-end space-x-3">
+                      <button
+                        type="button"
+                        onClick={resetBlockForm}
+                        className="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-600"
+                      >
+                        <X className="h-4 w-4 mr-2" />
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                      >
+                        <Save className="h-4 w-4 mr-2" />
+                        {editingBlock ? 'Update' : 'Add'} Block
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              )}
+
+              {/* Blocks List */}
+              <div className="bg-white dark:bg-gray-800 shadow sm:rounded-lg">
+                <div className="px-4 py-5 sm:p-6">
+                  <h3 className="text-lg leading-6 font-medium text-gray-900 dark:text-white mb-4">
+                    Blocks
+                  </h3>
+                  <div className="space-y-3">
+                    {blocks.map((block, index) => (
+                      <div
+                        key={block.id}
+                        className="p-4 border border-gray-200 dark:border-gray-700 rounded-lg"
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center">
+                            {getBlockTypeIcon(block.block_type)}
+                            <div className="ml-3">
+                              <h4 className="text-sm font-medium text-gray-900 dark:text-white">
+                                {block.title}
+                              </h4>
+                              <p className="text-xs text-gray-500 dark:text-gray-400">
+                                {block.block_type} • Position {block.position}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex space-x-2">
+                            <button
+                              onClick={() => handleMoveBlock(block.id, 'up')}
+                              disabled={index === 0}
+                              className="p-1 text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                              title="Move Up"
+                            >
+                              <MoveUp className="h-4 w-4" />
+                            </button>
+                            <button
+                              onClick={() => handleMoveBlock(block.id, 'down')}
+                              disabled={index === blocks.length - 1}
+                              className="p-1 text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                              title="Move Down"
+                            >
+                              <MoveDown className="h-4 w-4" />
+                            </button>
+                            <button
+                              onClick={() => duplicateBlock(block)}
+                              className="p-1 text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300"
+                              title="Duplicate Block"
+                            >
+                              <Copy className="h-4 w-4" />
+                            </button>
+                            <button
+                              onClick={() => handleEditBlock(block)}
+                              className="p-1 text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300"
+                              title="Edit Block"
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteBlock(block.id)}
+                              className="p-1 text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300"
+                              title="Delete Block"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </div>
+                        </div>
+                        {block.description && (
+                          <p className="mt-2 text-xs text-gray-600 dark:text-gray-300">
+                            {block.description}
+                          </p>
+                        )}
+                      </div>
+                    ))}
+
+                    {blocks.length === 0 && (
+                      <div className="text-center py-8">
+                        <Layers className="mx-auto h-12 w-12 text-gray-400" />
+                        <h3 className="mt-2 text-sm font-medium text-gray-900 dark:text-white">
+                          No blocks
+                        </h3>
+                        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                          Get started by adding a block to this page.
+                        </p>
+                        <div className="mt-6">
+                          <button
+                            onClick={() => setIsBlockFormOpen(true)}
+                            className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                          >
+                            <Plus className="h-4 w-4 mr-2" />
+                            Add Block
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="bg-white dark:bg-gray-800 shadow sm:rounded-lg">
+              <div className="px-4 py-5 sm:p-6 text-center">
+                <Layout className="mx-auto h-12 w-12 text-gray-400" />
+                <h3 className="mt-2 text-sm font-medium text-gray-900 dark:text-white">
+                  No page selected
+                </h3>
+                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                  Select a page from the list to manage its blocks.
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default PageBuilder;
+
+export default PageBuilder
