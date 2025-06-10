@@ -761,7 +761,6 @@ const PageBuilder: React.FC = () => {
                           type="text"
                           name="background_color"
                           value={blockFormData.background_color}
-                          onChange={handleBlockInputChange}
                           className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white sm:text-sm py-2.5"
                           placeholder="e.g., #ffffff or bg-blue-100"
                         />
