@@ -6,25 +6,28 @@ import {
   Save, 
   X, 
   Layout, 
+  Layers, 
+  MoveUp, 
+  MoveDown,
   Eye, 
-  EyeOff, 
-  ArrowUp, 
-  ArrowDown, 
-  Copy, 
-  ExternalLink,
-  Palette,
-  Settings,
-  Layers,
-  FileText,
+  EyeOff,
+  Copy,
+  Bot,
+  Trophy,
   BarChart2,
-  Image,
-  MessageSquare,
+  MonitorPlay,
+  Type,
+  Puzzle,
+  Palette,
+  Coins,
   Target,
-  Award,
-  MonitorPlay
+  Calendar,
+  Users,
+  ArrowRight,
+  Loader2
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
-import { Link } from 'react-router-dom';
+import { DragDropContext, Droppable, Draggable } from 'react-beautiful-dnd';
 
 interface PageLayout {
   id: string;
@@ -60,15 +63,16 @@ interface Contest {
   title: string;
 }
 
-interface Ad {
+interface AdPlacement {
   id: string;
-  title: string;
+  name: string;
+  display_name: string;
 }
 
 const PageBuilder: React.FC = () => {
   const [pages, setPages] = useState<PageLayout[]>([]);
-  const [selectedPage, setSelectedPage] = useState<PageLayout | null>(null);
   const [blocks, setBlocks] = useState<UIBlock[]>([]);
+  const [selectedPage, setSelectedPage] = useState<PageLayout | null>(null);
   const [isPageFormOpen, setIsPageFormOpen] = useState(false);
   const [isBlockFormOpen, setIsBlockFormOpen] = useState(false);
   const [editingPage, setEditingPage] = useState<PageLayout | null>(null);
@@ -78,32 +82,37 @@ const PageBuilder: React.FC = () => {
     slug: '',
     description: '',
     is_published: false,
-    metadata: '{}'
+    metadata: { showInNav: false, icon: '' }
   });
   const [blockFormData, setBlockFormData] = useState({
     title: '',
     description: '',
     block_type: 'text' as UIBlock['block_type'],
-    content: '{}',
+    content: {},
     background_color: '#ffffff',
-    visibility_rules: '{}'
+    visibility_rules: {}
   });
   
-  // Reference data for dropdowns
+  // Options for block configuration
   const [aiModels, setAiModels] = useState<AIModel[]>([]);
   const [contests, setContests] = useState<Contest[]>([]);
-  const [ads, setAds] = useState<Ad[]>([]);
-  
+  const [adPlacements, setAdPlacements] = useState<AdPlacement[]>([]);
   const [loading, setLoading] = useState(true);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     fetchPages();
-    fetchReferenceData();
+    fetchDropdownOptions();
   }, []);
 
   useEffect(() => {
     if (selectedPage) {
       fetchBlocks(selectedPage.id);
+      setPreviewUrl(`/pages/${selectedPage.slug}`);
+    } else {
+      setBlocks([]);
+      setPreviewUrl(null);
     }
   }, [selectedPage]);
 
@@ -113,7 +122,7 @@ const PageBuilder: React.FC = () => {
       const { data, error } = await supabase
         .from('page_layouts')
         .select('*')
-        .order('created_at', { ascending: false });
+        .order('name');
 
       if (error) throw error;
       setPages(data || []);
@@ -130,7 +139,7 @@ const PageBuilder: React.FC = () => {
         .from('ui_blocks')
         .select('*')
         .eq('page_id', pageId)
-        .order('position', { ascending: true });
+        .order('position');
 
       if (error) throw error;
       setBlocks(data || []);
@@ -139,33 +148,36 @@ const PageBuilder: React.FC = () => {
     }
   };
 
-  const fetchReferenceData = async () => {
+  const fetchDropdownOptions = async () => {
     try {
       // Fetch AI models
-      const { data: modelsData } = await supabase
+      const { data: modelsData, error: modelsError } = await supabase
         .from('ai_models')
         .select('id, name')
         .eq('is_active', true);
-      
+
+      if (modelsError) throw modelsError;
       setAiModels(modelsData || []);
-      
+
       // Fetch contests
-      const { data: contestsData } = await supabase
+      const { data: contestsData, error: contestsError } = await supabase
         .from('contests')
         .select('id, title')
         .eq('status', 'active');
-      
+
+      if (contestsError) throw contestsError;
       setContests(contestsData || []);
-      
-      // Fetch ads
-      const { data: adsData } = await supabase
-        .from('ads')
-        .select('id, title')
+
+      // Fetch ad placements
+      const { data: placementsData, error: placementsError } = await supabase
+        .from('ad_placements')
+        .select('id, name, display_name')
         .eq('is_active', true);
-      
-      setAds(adsData || []);
+
+      if (placementsError) throw placementsError;
+      setAdPlacements(placementsData || []);
     } catch (error) {
-      console.error('Error fetching reference data:', error);
+      console.error('Error fetching dropdown options:', error);
     }
   };
 
@@ -173,20 +185,73 @@ const PageBuilder: React.FC = () => {
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
   ) => {
     const { name, value, type } = e.target;
-    setPageFormData(prev => ({
-      ...prev,
-      [name]: type === 'checkbox' ? (e.target as HTMLInputElement).checked : value
-    }));
+    
+    if (name === 'showInNav') {
+      setPageFormData(prev => ({
+        ...prev,
+        metadata: {
+          ...prev.metadata,
+          showInNav: (e.target as HTMLInputElement).checked
+        }
+      }));
+    } else if (name === 'icon') {
+      setPageFormData(prev => ({
+        ...prev,
+        metadata: {
+          ...prev.metadata,
+          icon: value
+        }
+      }));
+    } else {
+      setPageFormData(prev => ({
+        ...prev,
+        [name]: type === 'checkbox' ? (e.target as HTMLInputElement).checked : value
+      }));
+    }
   };
 
   const handleBlockInputChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
   ) => {
     const { name, value, type } = e.target;
-    setBlockFormData(prev => ({
-      ...prev,
-      [name]: type === 'checkbox' ? (e.target as HTMLInputElement).checked : value
-    }));
+    
+    if (name === 'block_type') {
+      // Reset content when block type changes
+      setBlockFormData(prev => ({
+        ...prev,
+        block_type: value as UIBlock['block_type'],
+        content: {}
+      }));
+    } else if (name.startsWith('content.')) {
+      const contentField = name.split('.')[1];
+      setBlockFormData(prev => ({
+        ...prev,
+        content: {
+          ...prev.content,
+          [contentField]: type === 'checkbox' 
+            ? (e.target as HTMLInputElement).checked 
+            : type === 'number' 
+              ? parseInt(value) 
+              : value
+        }
+      }));
+    } else if (name.startsWith('visibility.')) {
+      const visibilityField = name.split('.')[1];
+      setBlockFormData(prev => ({
+        ...prev,
+        visibility_rules: {
+          ...prev.visibility_rules,
+          [visibilityField]: type === 'checkbox' 
+            ? (e.target as HTMLInputElement).checked 
+            : value
+        }
+      }));
+    } else {
+      setBlockFormData(prev => ({
+        ...prev,
+        [name]: type === 'checkbox' ? (e.target as HTMLInputElement).checked : value
+      }));
+    }
   };
 
   const resetPageForm = () => {
@@ -195,7 +260,7 @@ const PageBuilder: React.FC = () => {
       slug: '',
       description: '',
       is_published: false,
-      metadata: '{}'
+      metadata: { showInNav: false, icon: '' }
     });
     setEditingPage(null);
     setIsPageFormOpen(false);
@@ -206,9 +271,9 @@ const PageBuilder: React.FC = () => {
       title: '',
       description: '',
       block_type: 'text',
-      content: '{}',
+      content: {},
       background_color: '#ffffff',
-      visibility_rules: '{}'
+      visibility_rules: {}
     });
     setEditingBlock(null);
     setIsBlockFormOpen(false);
@@ -216,21 +281,15 @@ const PageBuilder: React.FC = () => {
 
   const handlePageSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setIsSaving(true);
+    
     try {
-      let metadata;
-      try {
-        metadata = JSON.parse(pageFormData.metadata);
-      } catch (error) {
-        alert('Invalid JSON in metadata field');
-        return;
-      }
-
       const pageData = {
         name: pageFormData.name,
         slug: pageFormData.slug.toLowerCase().replace(/\s+/g, '-'),
         description: pageFormData.description || null,
         is_published: pageFormData.is_published,
-        metadata
+        metadata: pageFormData.metadata
       };
 
       if (editingPage) {
@@ -248,6 +307,7 @@ const PageBuilder: React.FC = () => {
 
         if (error) throw error;
         
+        // Select the newly created page
         if (data && data.length > 0) {
           setSelectedPage(data[0]);
         }
@@ -258,43 +318,25 @@ const PageBuilder: React.FC = () => {
     } catch (error) {
       console.error('Error saving page:', error);
       alert('Error saving page');
+    } finally {
+      setIsSaving(false);
     }
   };
 
   const handleBlockSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (!selectedPage) {
-      alert('No page selected');
-      return;
-    }
+    if (!selectedPage) return;
+    setIsSaving(true);
     
     try {
-      let content;
-      let visibilityRules;
-      
-      try {
-        content = JSON.parse(blockFormData.content);
-      } catch (error) {
-        alert('Invalid JSON in content field');
-        return;
-      }
-      
-      try {
-        visibilityRules = JSON.parse(blockFormData.visibility_rules);
-      } catch (error) {
-        alert('Invalid JSON in visibility rules field');
-        return;
-      }
-
       const blockData = {
         page_id: selectedPage.id,
         title: blockFormData.title,
         description: blockFormData.description || null,
         block_type: blockFormData.block_type,
-        content,
-        background_color: blockFormData.background_color,
-        visibility_rules: visibilityRules,
+        content: blockFormData.content,
+        background_color: blockFormData.background_color || null,
+        visibility_rules: blockFormData.visibility_rules,
         position: editingBlock ? editingBlock.position : blocks.length
       };
 
@@ -318,57 +360,38 @@ const PageBuilder: React.FC = () => {
     } catch (error) {
       console.error('Error saving block:', error);
       alert('Error saving block');
+    } finally {
+      setIsSaving(false);
     }
   };
 
   const handleEditPage = (page: PageLayout) => {
-    let metadataStr = '{}';
-    try {
-      metadataStr = typeof page.metadata === 'string' 
-        ? page.metadata 
-        : JSON.stringify(page.metadata, null, 2);
-    } catch (e) {
-      console.error('Error parsing metadata:', e);
-    }
-    
+    const metadata = typeof page.metadata === 'string' 
+      ? JSON.parse(page.metadata) 
+      : page.metadata || {};
+      
     setPageFormData({
       name: page.name,
       slug: page.slug,
       description: page.description || '',
       is_published: page.is_published,
-      metadata: metadataStr
+      metadata: {
+        showInNav: metadata.showInNav || false,
+        icon: metadata.icon || ''
+      }
     });
     setEditingPage(page);
     setIsPageFormOpen(true);
   };
 
   const handleEditBlock = (block: UIBlock) => {
-    let contentStr = '{}';
-    let visibilityRulesStr = '{}';
-    
-    try {
-      contentStr = typeof block.content === 'string' 
-        ? block.content 
-        : JSON.stringify(block.content, null, 2);
-    } catch (e) {
-      console.error('Error parsing content:', e);
-    }
-    
-    try {
-      visibilityRulesStr = typeof block.visibility_rules === 'string' 
-        ? block.visibility_rules 
-        : JSON.stringify(block.visibility_rules, null, 2);
-    } catch (e) {
-      console.error('Error parsing visibility rules:', e);
-    }
-    
     setBlockFormData({
       title: block.title,
       description: block.description || '',
       block_type: block.block_type,
-      content: contentStr,
+      content: block.content || {},
       background_color: block.background_color || '#ffffff',
-      visibility_rules: visibilityRulesStr
+      visibility_rules: block.visibility_rules || {}
     });
     setEditingBlock(block);
     setIsBlockFormOpen(true);
@@ -389,7 +412,6 @@ const PageBuilder: React.FC = () => {
       
       if (selectedPage?.id === id) {
         setSelectedPage(null);
-        setBlocks([]);
       }
     } catch (error) {
       console.error('Error deleting page:', error);
@@ -417,7 +439,33 @@ const PageBuilder: React.FC = () => {
     }
   };
 
-  const togglePagePublish = async (id: string, currentStatus: boolean) => {
+  const handleDuplicateBlock = async (block: UIBlock) => {
+    if (!selectedPage) return;
+    
+    try {
+      const newBlock = {
+        ...block,
+        id: undefined,
+        title: `${block.title} (Copy)`,
+        position: blocks.length
+      };
+      
+      delete newBlock.id;
+      
+      const { error } = await supabase
+        .from('ui_blocks')
+        .insert([newBlock]);
+
+      if (error) throw error;
+      
+      await fetchBlocks(selectedPage.id);
+    } catch (error) {
+      console.error('Error duplicating block:', error);
+      alert('Error duplicating block');
+    }
+  };
+
+  const handleTogglePagePublish = async (id: string, currentStatus: boolean) => {
     try {
       const { error } = await supabase
         .from('page_layouts')
@@ -437,7 +485,9 @@ const PageBuilder: React.FC = () => {
     }
   };
 
-  const moveBlock = async (blockId: string, direction: 'up' | 'down') => {
+  const handleMoveBlock = async (blockId: string, direction: 'up' | 'down') => {
+    if (!selectedPage) return;
+    
     const blockIndex = blocks.findIndex(b => b.id === blockId);
     if (blockIndex === -1) return;
     
@@ -449,7 +499,7 @@ const PageBuilder: React.FC = () => {
       newBlocks[blockIndex].position = newBlocks[blockIndex - 1].position;
       newBlocks[blockIndex - 1].position = temp;
       
-      // Update in database
+      // Update positions in database
       try {
         await Promise.all([
           supabase
@@ -462,10 +512,7 @@ const PageBuilder: React.FC = () => {
             .eq('id', newBlocks[blockIndex - 1].id)
         ]);
         
-        // Re-fetch blocks to ensure correct order
-        if (selectedPage) {
-          await fetchBlocks(selectedPage.id);
-        }
+        await fetchBlocks(selectedPage.id);
       } catch (error) {
         console.error('Error moving block:', error);
         alert('Error moving block');
@@ -476,7 +523,7 @@ const PageBuilder: React.FC = () => {
       newBlocks[blockIndex].position = newBlocks[blockIndex + 1].position;
       newBlocks[blockIndex + 1].position = temp;
       
-      // Update in database
+      // Update positions in database
       try {
         await Promise.all([
           supabase
@@ -489,10 +536,7 @@ const PageBuilder: React.FC = () => {
             .eq('id', newBlocks[blockIndex + 1].id)
         ]);
         
-        // Re-fetch blocks to ensure correct order
-        if (selectedPage) {
-          await fetchBlocks(selectedPage.id);
-        }
+        await fetchBlocks(selectedPage.id);
       } catch (error) {
         console.error('Error moving block:', error);
         alert('Error moving block');
@@ -500,342 +544,678 @@ const PageBuilder: React.FC = () => {
     }
   };
 
-  const duplicateBlock = async (block: UIBlock) => {
-    if (!selectedPage) return;
+  const onDragEnd = async (result: any) => {
+    if (!result.destination || !selectedPage) return;
     
+    const sourceIndex = result.source.index;
+    const destinationIndex = result.destination.index;
+    
+    if (sourceIndex === destinationIndex) return;
+    
+    const reorderedBlocks = Array.from(blocks);
+    const [removed] = reorderedBlocks.splice(sourceIndex, 1);
+    reorderedBlocks.splice(destinationIndex, 0, removed);
+    
+    // Update positions
+    const updatedBlocks = reorderedBlocks.map((block, index) => ({
+      ...block,
+      position: index
+    }));
+    
+    setBlocks(updatedBlocks);
+    
+    // Update in database
     try {
-      const newBlock = {
-        ...block,
-        id: undefined,
-        title: `${block.title} (Copy)`,
-        position: blocks.length
-      };
-      
-      const { error } = await supabase
-        .from('ui_blocks')
-        .insert([newBlock]);
-      
-      if (error) throw error;
-      
-      await fetchBlocks(selectedPage.id);
+      for (const block of updatedBlocks) {
+        await supabase
+          .from('ui_blocks')
+          .update({ position: block.position })
+          .eq('id', block.id);
+      }
     } catch (error) {
-      console.error('Error duplicating block:', error);
-      alert('Error duplicating block');
+      console.error('Error reordering blocks:', error);
+      alert('Error reordering blocks');
+      // Refresh to get correct order
+      await fetchBlocks(selectedPage.id);
     }
   };
 
   const getBlockTypeIcon = (type: UIBlock['block_type']) => {
     switch (type) {
-      case 'analyzer': return <Brain className="h-5 w-5 text-blue-500" />;
-      case 'contest': return <Target className="h-5 w-5 text-green-500" />;
-      case 'leaderboard': return <Award className="h-5 w-5 text-yellow-500" />;
-      case 'ad': return <MonitorPlay className="h-5 w-5 text-red-500" />;
-      case 'text': return <MessageSquare className="h-5 w-5 text-purple-500" />;
-      case 'custom': return <Settings className="h-5 w-5 text-indigo-500" />;
+      case 'analyzer': return <Bot className="h-5 w-5 text-blue-500" />;
+      case 'contest': return <Trophy className="h-5 w-5 text-yellow-500" />;
+      case 'leaderboard': return <BarChart2 className="h-5 w-5 text-purple-500" />;
+      case 'ad': return <MonitorPlay className="h-5 w-5 text-green-500" />;
+      case 'text': return <Type className="h-5 w-5 text-gray-500" />;
+      case 'custom': return <Puzzle className="h-5 w-5 text-indigo-500" />;
       default: return <Layers className="h-5 w-5 text-gray-500" />;
     }
   };
 
-  const getContentFields = () => {
-    switch (blockFormData.block_type) {
-      case 'analyzer':
-        return (
-          <>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Analyzer Model
-              </label>
-              <select
-                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                onChange={(e) => {
-                  const content = JSON.parse(blockFormData.content || '{}');
-                  content.analyzer_id = e.target.value || null;
-                  setBlockFormData({
-                    ...blockFormData,
-                    content: JSON.stringify(content, null, 2)
-                  });
-                }}
-                value={JSON.parse(blockFormData.content || '{}').analyzer_id || ''}
-              >
-                <option value="">Select an analyzer model</option>
-                {aiModels.map(model => (
-                  <option key={model.id} value={model.id}>{model.name}</option>
-                ))}
-              </select>
-            </div>
-            <div className="flex items-center mt-2">
-              <input
-                type="checkbox"
-                id="showUploadButton"
-                className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
-                checked={JSON.parse(blockFormData.content || '{}').showUploadButton || false}
-                onChange={(e) => {
-                  const content = JSON.parse(blockFormData.content || '{}');
-                  content.showUploadButton = e.target.checked;
-                  setBlockFormData({
-                    ...blockFormData,
-                    content: JSON.stringify(content, null, 2)
-                  });
-                }}
-              />
-              <label htmlFor="showUploadButton" className="ml-2 block text-sm text-gray-700 dark:text-gray-300">
-                Show Upload Button
-              </label>
-            </div>
-          </>
-        );
-      
-      case 'contest':
-        return (
-          <>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Contest
-              </label>
-              <select
-                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                onChange={(e) => {
-                  const content = JSON.parse(blockFormData.content || '{}');
-                  content.contest_id = e.target.value || null;
-                  setBlockFormData({
-                    ...blockFormData,
-                    content: JSON.stringify(content, null, 2)
-                  });
-                }}
-                value={JSON.parse(blockFormData.content || '{}').contest_id || ''}
-              >
-                <option value="">Select a contest</option>
-                {contests.map(contest => (
-                  <option key={contest.id} value={contest.id}>{contest.title}</option>
-                ))}
-              </select>
-            </div>
-            <div className="flex items-center mt-2">
-              <input
-                type="checkbox"
-                id="showPrizePool"
-                className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
-                checked={JSON.parse(blockFormData.content || '{}').showPrizePool || false}
-                onChange={(e) => {
-                  const content = JSON.parse(blockFormData.content || '{}');
-                  content.showPrizePool = e.target.checked;
-                  setBlockFormData({
-                    ...blockFormData,
-                    content: JSON.stringify(content, null, 2)
-                  });
-                }}
-              />
-              <label htmlFor="showPrizePool" className="ml-2 block text-sm text-gray-700 dark:text-gray-300">
-                Show Prize Pool
-              </label>
-            </div>
-          </>
-        );
-      
-      case 'leaderboard':
-        return (
-          <>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Sport Filter
+  const renderBlockForm = () => {
+    return (
+      <div className="bg-white dark:bg-gray-800 shadow sm:rounded-lg mb-6">
+        <form onSubmit={handleBlockSubmit} className="p-6">
+          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+            <div className="sm:col-span-2">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                Block Title *
               </label>
               <input
                 type="text"
-                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                placeholder="e.g., NFL, NBA, or leave empty for all"
-                value={JSON.parse(blockFormData.content || '{}').sport || ''}
-                onChange={(e) => {
-                  const content = JSON.parse(blockFormData.content || '{}');
-                  content.sport = e.target.value;
-                  setBlockFormData({
-                    ...blockFormData,
-                    content: JSON.stringify(content, null, 2)
-                  });
-                }}
+                name="title"
+                value={blockFormData.title}
+                onChange={handleBlockInputChange}
+                required
+                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white sm:text-sm py-2.5"
+                placeholder="e.g., NFL Analyzer"
               />
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 mt-2">
-                Entry Limit
-              </label>
-              <input
-                type="number"
-                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                placeholder="Number of entries to show"
-                value={JSON.parse(blockFormData.content || '{}').limit || '10'}
-                onChange={(e) => {
-                  const content = JSON.parse(blockFormData.content || '{}');
-                  content.limit = parseInt(e.target.value) || 10;
-                  setBlockFormData({
-                    ...blockFormData,
-                    content: JSON.stringify(content, null, 2)
-                  });
-                }}
-              />
-            </div>
-          </>
-        );
-      
-      case 'ad':
-        return (
-          <>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Ad Campaign
-              </label>
-              <select
-                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                onChange={(e) => {
-                  const content = JSON.parse(blockFormData.content || '{}');
-                  content.campaign_id = e.target.value || null;
-                  setBlockFormData({
-                    ...blockFormData,
-                    content: JSON.stringify(content, null, 2)
-                  });
-                }}
-                value={JSON.parse(blockFormData.content || '{}').campaign_id || ''}
-              >
-                <option value="">Select an ad campaign</option>
-                {ads.map(ad => (
-                  <option key={ad.id} value={ad.id}>{ad.title}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 mt-2">
-                Placement Type
-              </label>
-              <select
-                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                onChange={(e) => {
-                  const content = JSON.parse(blockFormData.content || '{}');
-                  content.placement = e.target.value;
-                  setBlockFormData({
-                    ...blockFormData,
-                    content: JSON.stringify(content, null, 2)
-                  });
-                }}
-                value={JSON.parse(blockFormData.content || '{}').placement || 'inline'}
-              >
-                <option value="inline">Inline</option>
-                <option value="sidebar">Sidebar</option>
-                <option value="banner">Banner</option>
-              </select>
-            </div>
-          </>
-        );
-      
-      case 'text':
-        return (
-          <>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Text Content
+
+            <div className="sm:col-span-2">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                Description
               </label>
               <textarea
-                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                rows={4}
-                placeholder="Enter text content"
-                value={JSON.parse(blockFormData.content || '{}').text || ''}
-                onChange={(e) => {
-                  const content = JSON.parse(blockFormData.content || '{}');
-                  content.text = e.target.value;
-                  setBlockFormData({
-                    ...blockFormData,
-                    content: JSON.stringify(content, null, 2)
-                  });
-                }}
+                name="description"
+                value={blockFormData.description}
+                onChange={handleBlockInputChange}
+                rows={2}
+                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white sm:text-sm"
+                placeholder="Brief description of this block"
               />
             </div>
+
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 mt-2">
-                Text Size
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                Block Type *
               </label>
               <select
-                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                onChange={(e) => {
-                  const content = JSON.parse(blockFormData.content || '{}');
-                  content.textSize = e.target.value;
-                  setBlockFormData({
-                    ...blockFormData,
-                    content: JSON.stringify(content, null, 2)
-                  });
-                }}
-                value={JSON.parse(blockFormData.content || '{}').textSize || 'medium'}
+                name="block_type"
+                value={blockFormData.block_type}
+                onChange={handleBlockInputChange}
+                required
+                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white sm:text-sm py-2.5"
               >
-                <option value="small">Small</option>
-                <option value="medium">Medium</option>
-                <option value="large">Large</option>
+                <option value="analyzer">Analyzer</option>
+                <option value="contest">Contest</option>
+                <option value="leaderboard">Leaderboard</option>
+                <option value="ad">Ad</option>
+                <option value="text">Text</option>
+                <option value="custom">Custom</option>
               </select>
             </div>
-          </>
-        );
-      
-      case 'custom':
-        return (
-          <>
+
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Component Name
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                Background Color
               </label>
-              <input
-                type="text"
-                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                placeholder="e.g., UserPicks, RecentActivity"
-                value={JSON.parse(blockFormData.content || '{}').component || ''}
-                onChange={(e) => {
-                  const content = JSON.parse(blockFormData.content || '{}');
-                  content.component = e.target.value;
-                  setBlockFormData({
-                    ...blockFormData,
-                    content: JSON.stringify(content, null, 2)
-                  });
-                }}
-              />
+              <div className="mt-1 flex items-center">
+                <input
+                  type="color"
+                  name="background_color"
+                  value={blockFormData.background_color}
+                  onChange={handleBlockInputChange}
+                  className="h-8 w-8 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                />
+                <input
+                  type="text"
+                  name="background_color"
+                  value={blockFormData.background_color}
+                  onChange={handleBlockInputChange}
+                  className="ml-2 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white sm:text-sm py-2.5"
+                  placeholder="#ffffff"
+                />
+              </div>
             </div>
-            <div className="mt-2">
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Component Props (JSON)
-              </label>
-              <textarea
-                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white font-mono text-sm"
-                rows={4}
-                placeholder='{"limit": 5, "showHeader": true}'
-                value={JSON.stringify(JSON.parse(blockFormData.content || '{}').props || {}, null, 2)}
-                onChange={(e) => {
-                  try {
-                    const props = JSON.parse(e.target.value);
-                    const content = JSON.parse(blockFormData.content || '{}');
-                    content.props = props;
-                    setBlockFormData({
-                      ...blockFormData,
-                      content: JSON.stringify(content, null, 2)
-                    });
-                  } catch (error) {
-                    // Don't update if invalid JSON
-                    console.error('Invalid JSON:', error);
-                  }
-                }}
-              />
+
+            {/* Block-specific settings */}
+            <div className="sm:col-span-2 border-t border-gray-200 dark:border-gray-700 pt-4">
+              <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-4 flex items-center">
+                <Palette className="h-5 w-5 mr-2 text-indigo-500" />
+                Block Settings
+              </h3>
+              
+              {blockFormData.block_type === 'analyzer' && (
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                      AI Model
+                    </label>
+                    <select
+                      name="content.model_id"
+                      value={blockFormData.content.model_id || ''}
+                      onChange={handleBlockInputChange}
+                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white sm:text-sm py-2.5"
+                    >
+                      <option value="">Any Model</option>
+                      {aiModels.map(model => (
+                        <option key={model.id} value={model.id}>
+                          {model.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                      Token Cost
+                    </label>
+                    <input
+                      type="number"
+                      name="content.token_cost"
+                      value={blockFormData.content.token_cost || ''}
+                      onChange={handleBlockInputChange}
+                      min="0"
+                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white sm:text-sm py-2.5"
+                      placeholder="Leave empty to use model default"
+                    />
+                  </div>
+                  
+                  <div className="flex items-center">
+                    <input
+                      type="checkbox"
+                      name="content.showUploadButton"
+                      checked={blockFormData.content.showUploadButton || false}
+                      onChange={handleBlockInputChange}
+                      className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                    />
+                    <label className="ml-2 block text-sm text-gray-700 dark:text-gray-300">
+                      Show Image Upload Button
+                    </label>
+                  </div>
+                </div>
+              )}
+              
+              {blockFormData.block_type === 'contest' && (
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                      Contest
+                    </label>
+                    <select
+                      name="content.contest_id"
+                      value={blockFormData.content.contest_id || ''}
+                      onChange={handleBlockInputChange}
+                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white sm:text-sm py-2.5"
+                    >
+                      <option value="">Select Contest</option>
+                      {contests.map(contest => (
+                        <option key={contest.id} value={contest.id}>
+                          {contest.title}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  
+                  <div className="flex items-center">
+                    <input
+                      type="checkbox"
+                      name="content.showPrizePool"
+                      checked={blockFormData.content.showPrizePool || false}
+                      onChange={handleBlockInputChange}
+                      className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                    />
+                    <label className="ml-2 block text-sm text-gray-700 dark:text-gray-300">
+                      Show Prize Pool
+                    </label>
+                  </div>
+                  
+                  <div className="flex items-center">
+                    <input
+                      type="checkbox"
+                      name="content.showEntryCount"
+                      checked={blockFormData.content.showEntryCount || false}
+                      onChange={handleBlockInputChange}
+                      className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                    />
+                    <label className="ml-2 block text-sm text-gray-700 dark:text-gray-300">
+                      Show Entry Count
+                    </label>
+                  </div>
+                  
+                  <div className="flex items-center">
+                    <input
+                      type="checkbox"
+                      name="content.showTokenCost"
+                      checked={blockFormData.content.showTokenCost || false}
+                      onChange={handleBlockInputChange}
+                      className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                    />
+                    <label className="ml-2 block text-sm text-gray-700 dark:text-gray-300">
+                      Show Token Cost
+                    </label>
+                  </div>
+                </div>
+              )}
+              
+              {blockFormData.block_type === 'leaderboard' && (
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                      Sport
+                    </label>
+                    <select
+                      name="content.sport"
+                      value={blockFormData.content.sport || ''}
+                      onChange={handleBlockInputChange}
+                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white sm:text-sm py-2.5"
+                    >
+                      <option value="">All Sports</option>
+                      <option value="NFL">NFL</option>
+                      <option value="NBA">NBA</option>
+                      <option value="MLB">MLB</option>
+                      <option value="NHL">NHL</option>
+                      <option value="Soccer">Soccer</option>
+                    </select>
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                      Entries to Show
+                    </label>
+                    <input
+                      type="number"
+                      name="content.limit"
+                      value={blockFormData.content.limit || '10'}
+                      onChange={handleBlockInputChange}
+                      min="1"
+                      max="100"
+                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white sm:text-sm py-2.5"
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                      Time Period
+                    </label>
+                    <select
+                      name="content.timePeriod"
+                      value={blockFormData.content.timePeriod || 'all'}
+                      onChange={handleBlockInputChange}
+                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white sm:text-sm py-2.5"
+                    >
+                      <option value="all">All Time</option>
+                      <option value="week">This Week</option>
+                      <option value="month">This Month</option>
+                      <option value="season">Current Season</option>
+                    </select>
+                  </div>
+                </div>
+              )}
+              
+              {blockFormData.block_type === 'ad' && (
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                      Ad Placement
+                    </label>
+                    <select
+                      name="content.placement"
+                      value={blockFormData.content.placement || ''}
+                      onChange={handleBlockInputChange}
+                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white sm:text-sm py-2.5"
+                    >
+                      <option value="">Select Placement</option>
+                      {adPlacements.map(placement => (
+                        <option key={placement.id} value={placement.name}>
+                          {placement.display_name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                      Sport Category (for targeting)
+                    </label>
+                    <select
+                      name="content.sportCategory"
+                      value={blockFormData.content.sportCategory || ''}
+                      onChange={handleBlockInputChange}
+                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white sm:text-sm py-2.5"
+                    >
+                      <option value="">All Sports</option>
+                      <option value="NFL">NFL</option>
+                      <option value="NBA">NBA</option>
+                      <option value="MLB">MLB</option>
+                      <option value="NHL">NHL</option>
+                      <option value="Soccer">Soccer</option>
+                    </select>
+                  </div>
+                </div>
+              )}
+              
+              {blockFormData.block_type === 'text' && (
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                      Text Content
+                    </label>
+                    <textarea
+                      name="content.text"
+                      value={blockFormData.content.text || ''}
+                      onChange={handleBlockInputChange}
+                      rows={4}
+                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white sm:text-sm"
+                      placeholder="Enter text content here"
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                      Text Size
+                    </label>
+                    <select
+                      name="content.textSize"
+                      value={blockFormData.content.textSize || 'medium'}
+                      onChange={handleBlockInputChange}
+                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white sm:text-sm py-2.5"
+                    >
+                      <option value="small">Small</option>
+                      <option value="medium">Medium</option>
+                      <option value="large">Large</option>
+                    </select>
+                  </div>
+                </div>
+              )}
+              
+              {blockFormData.block_type === 'custom' && (
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                      Component Name
+                    </label>
+                    <select
+                      name="content.component"
+                      value={blockFormData.content.component || ''}
+                      onChange={handleBlockInputChange}
+                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white sm:text-sm py-2.5"
+                    >
+                      <option value="">Select Component</option>
+                      <option value="UserAchievements">User Achievements</option>
+                      <option value="UserPicks">User Picks</option>
+                      <option value="TokenHistory">Token History</option>
+                      <option value="UpcomingGames">Upcoming Games</option>
+                    </select>
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                      Component Props (JSON)
+                    </label>
+                    <textarea
+                      name="content.props"
+                      value={blockFormData.content.props || '{}'}
+                      onChange={handleBlockInputChange}
+                      rows={3}
+                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white sm:text-sm font-mono"
+                      placeholder='{"limit": 5, "showHeader": true}'
+                    />
+                  </div>
+                </div>
+              )}
             </div>
-          </>
-        );
-      
-      default:
-        return (
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Content (JSON)
-            </label>
-            <textarea
-              className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white font-mono text-sm"
-              rows={6}
-              value={blockFormData.content}
-              onChange={(e) => setBlockFormData({ ...blockFormData, content: e.target.value })}
-            />
+
+            {/* Visibility Rules */}
+            <div className="sm:col-span-2 border-t border-gray-200 dark:border-gray-700 pt-4">
+              <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-4 flex items-center">
+                <Eye className="h-5 w-5 mr-2 text-indigo-500" />
+                Visibility Rules
+              </h3>
+              
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Sport Filter
+                  </label>
+                  <select
+                    name="visibility.sport"
+                    value={blockFormData.visibility_rules.sport || ''}
+                    onChange={handleBlockInputChange}
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white sm:text-sm py-2.5"
+                  >
+                    <option value="">All Sports</option>
+                    <option value="NFL">NFL</option>
+                    <option value="NBA">NBA</option>
+                    <option value="MLB">MLB</option>
+                    <option value="NHL">NHL</option>
+                    <option value="Soccer">Soccer</option>
+                  </select>
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    User Status
+                  </label>
+                  <select
+                    name="visibility.userStatus"
+                    value={blockFormData.visibility_rules.userStatus || ''}
+                    onChange={handleBlockInputChange}
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white sm:text-sm py-2.5"
+                  >
+                    <option value="">All Users</option>
+                    <option value="free">Free Users</option>
+                    <option value="paid">Paid Subscribers</option>
+                    <option value="elite">Elite Subscribers</option>
+                  </select>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                      Start Date
+                    </label>
+                    <input
+                      type="date"
+                      name="visibility.startDate"
+                      value={blockFormData.visibility_rules.startDate || ''}
+                      onChange={handleBlockInputChange}
+                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white sm:text-sm py-2.5"
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                      End Date
+                    </label>
+                    <input
+                      type="date"
+                      name="visibility.endDate"
+                      value={blockFormData.visibility_rules.endDate || ''}
+                      onChange={handleBlockInputChange}
+                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white sm:text-sm py-2.5"
+                    />
+                  </div>
+                </div>
+                
+                <div className="flex items-center">
+                  <input
+                    type="checkbox"
+                    name="visibility.requiresTokens"
+                    checked={blockFormData.visibility_rules.requiresTokens || false}
+                    onChange={handleBlockInputChange}
+                    className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                  />
+                  <label className="ml-2 block text-sm text-gray-700 dark:text-gray-300">
+                    Requires Tokens to View
+                  </label>
+                </div>
+                
+                {blockFormData.visibility_rules.requiresTokens && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                      Token Cost
+                    </label>
+                    <input
+                      type="number"
+                      name="visibility.tokenCost"
+                      value={blockFormData.visibility_rules.tokenCost || '1'}
+                      onChange={handleBlockInputChange}
+                      min="1"
+                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white sm:text-sm py-2.5"
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
-        );
-    }
+
+          <div className="mt-6 flex justify-end space-x-3">
+            <button
+              type="button"
+              onClick={resetBlockForm}
+              className="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-600"
+            >
+              <X className="h-4 w-4 mr-2" />
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={isSaving}
+              className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
+            >
+              {isSaving ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                <>
+                  <Save className="h-4 w-4 mr-2" />
+                  {editingBlock ? 'Update' : 'Create'} Block
+                </>
+              )}
+            </button>
+          </div>
+        </form>
+      </div>
+    );
+  };
+
+  const renderPageForm = () => {
+    return (
+      <div className="bg-white dark:bg-gray-800 shadow sm:rounded-lg mb-6">
+        <form onSubmit={handlePageSubmit} className="p-6">
+          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                Page Name *
+              </label>
+              <input
+                type="text"
+                name="name"
+                value={pageFormData.name}
+                onChange={handlePageInputChange}
+                required
+                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white sm:text-sm py-2.5"
+                placeholder="e.g., NFL Dashboard"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                URL Slug *
+              </label>
+              <input
+                type="text"
+                name="slug"
+                value={pageFormData.slug}
+                onChange={handlePageInputChange}
+                required
+                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white sm:text-sm py-2.5"
+                placeholder="e.g., nfl-dashboard"
+              />
+              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                Will be accessible at /pages/your-slug
+              </p>
+            </div>
+
+            <div className="sm:col-span-2">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                Description
+              </label>
+              <textarea
+                name="description"
+                value={pageFormData.description}
+                onChange={handlePageInputChange}
+                rows={3}
+                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white sm:text-sm"
+                placeholder="Brief description of this page"
+              />
+            </div>
+
+            <div className="flex items-center">
+              <input
+                type="checkbox"
+                name="is_published"
+                checked={pageFormData.is_published}
+                onChange={handlePageInputChange}
+                className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+              />
+              <label className="ml-2 block text-sm text-gray-700 dark:text-gray-300">
+                Published
+              </label>
+            </div>
+
+            <div className="flex items-center">
+              <input
+                type="checkbox"
+                name="showInNav"
+                checked={pageFormData.metadata.showInNav}
+                onChange={handlePageInputChange}
+                className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+              />
+              <label className="ml-2 block text-sm text-gray-700 dark:text-gray-300">
+                Show in Navigation
+              </label>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                Icon (for navigation)
+              </label>
+              <input
+                type="text"
+                name="icon"
+                value={pageFormData.metadata.icon}
+                onChange={handlePageInputChange}
+                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white sm:text-sm py-2.5"
+                placeholder="e.g., home, football, chart"
+              />
+            </div>
+          </div>
+
+          <div className="mt-6 flex justify-end space-x-3">
+            <button
+              type="button"
+              onClick={resetPageForm}
+              className="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-600"
+            >
+              <X className="h-4 w-4 mr-2" />
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={isSaving}
+              className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
+            >
+              {isSaving ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                <>
+                  <Save className="h-4 w-4 mr-2" />
+                  {editingPage ? 'Update' : 'Create'} Page
+                </>
+              )}
+            </button>
+          </div>
+        </form>
+      </div>
+    );
   };
 
   return (
@@ -850,534 +1230,364 @@ const PageBuilder: React.FC = () => {
             Create and manage custom pages for your users
           </p>
         </div>
-        <button
-          onClick={() => setIsPageFormOpen(true)}
-          className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-        >
-          <Plus className="h-4 w-4 mr-2" />
-          Create New Page
-        </button>
+        <div className="flex space-x-3">
+          {previewUrl && (
+            <a
+              href={previewUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-600"
+            >
+              <Eye className="h-4 w-4 mr-2" />
+              Preview Page
+            </a>
+          )}
+          <button
+            onClick={() => setIsPageFormOpen(true)}
+            className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            Create Page
+          </button>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      {/* Page Form */}
+      {isPageFormOpen && renderPageForm()}
+
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
         {/* Pages List */}
         <div className="lg:col-span-1">
-          {/* Page Form */}
-          {isPageFormOpen && (
-            <div className="bg-white dark:bg-gray-800 shadow sm:rounded-lg mb-6">
-              <form onSubmit={handlePageSubmit} className="p-6">
-                <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-4">
-                  {editingPage ? 'Edit Page' : 'Create New Page'}
-                </h3>
-                
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                      Page Name *
-                    </label>
-                    <input
-                      type="text"
-                      name="name"
-                      value={pageFormData.name}
-                      onChange={handlePageInputChange}
-                      required
-                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white sm:text-sm py-2.5"
-                      placeholder="e.g., NFL Dashboard"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                      URL Slug *
-                    </label>
-                    <div className="mt-1 flex rounded-md shadow-sm">
-                      <span className="inline-flex items-center px-3 rounded-l-md border border-r-0 border-gray-300 bg-gray-50 text-gray-500 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-300 sm:text-sm">
-                        /pages/
-                      </span>
-                      <input
-                        type="text"
-                        name="slug"
-                        value={pageFormData.slug}
-                        onChange={handlePageInputChange}
-                        required
-                        className="flex-1 block w-full rounded-none rounded-r-md border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white sm:text-sm py-2.5"
-                        placeholder="nfl-dashboard"
-                      />
-                    </div>
-                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                      URL-friendly name (lowercase, no spaces)
-                    </p>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                      Description
-                    </label>
-                    <textarea
-                      name="description"
-                      value={pageFormData.description}
-                      onChange={handlePageInputChange}
-                      rows={3}
-                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white sm:text-sm"
-                      placeholder="Brief description of this page"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                      Metadata (JSON)
-                    </label>
-                    <textarea
-                      name="metadata"
-                      value={pageFormData.metadata}
-                      onChange={handlePageInputChange}
-                      rows={3}
-                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white sm:text-sm font-mono"
-                      placeholder='{"icon": "home", "showInNav": true}'
-                    />
-                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                      Use "showInNav": true to display in navigation
-                    </p>
-                  </div>
-
-                  <div className="flex items-center">
-                    <input
-                      type="checkbox"
-                      name="is_published"
-                      checked={pageFormData.is_published}
-                      onChange={handlePageInputChange}
-                      className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
-                    />
-                    <label className="ml-2 block text-sm text-gray-700 dark:text-gray-300">
-                      Published (visible to users)
-                    </label>
-                  </div>
-                </div>
-
-                <div className="mt-6 flex justify-end space-x-3">
-                  <button
-                    type="button"
-                    onClick={resetPageForm}
-                    className="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-600"
-                  >
-                    <X className="h-4 w-4 mr-2" />
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                  >
-                    <Save className="h-4 w-4 mr-2" />
-                    {editingPage ? 'Update' : 'Create'} Page
-                  </button>
-                </div>
-              </form>
-            </div>
-          )}
-
-          {/* Pages List */}
           <div className="bg-white dark:bg-gray-800 shadow sm:rounded-lg">
-            <div className="px-4 py-5 sm:p-6">
-              <h3 className="text-lg leading-6 font-medium text-gray-900 dark:text-white mb-4">
-                Your Pages
-              </h3>
-              
-              {pages.length > 0 ? (
-                <ul className="divide-y divide-gray-200 dark:divide-gray-700">
-                  {pages.map((page) => (
-                    <li 
-                      key={page.id}
-                      className={`py-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 ${
-                        selectedPage?.id === page.id ? 'bg-indigo-50 dark:bg-indigo-900/20' : ''
-                      }`}
-                      onClick={() => setSelectedPage(page)}
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
-                            {page.name}
-                          </p>
-                          <p className="text-sm text-gray-500 dark:text-gray-400 truncate">
-                            /pages/{page.slug}
-                          </p>
-                          <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
-                            Created: {new Date(page.created_at).toLocaleDateString()}
-                          </p>
-                        </div>
-                        <div className="flex items-center space-x-2">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              togglePagePublish(page.id, page.is_published);
-                            }}
-                            className={`p-1 rounded ${
-                              page.is_published
-                                ? 'text-green-600 hover:text-green-700 dark:text-green-400 dark:hover:text-green-300'
-                                : 'text-gray-400 hover:text-gray-500 dark:text-gray-500 dark:hover:text-gray-400'
-                            }`}
-                            title={page.is_published ? 'Unpublish' : 'Publish'}
-                          >
-                            {page.is_published ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
-                          </button>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleEditPage(page);
-                            }}
-                            className="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300"
-                            title="Edit"
-                          >
-                            <Pencil className="h-4 w-4" />
-                          </button>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleDeletePage(page.id);
-                            }}
-                            className="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300"
-                            title="Delete"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        </div>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <div className="text-center py-6">
-                  <Layout className="mx-auto h-12 w-12 text-gray-400" />
-                  <h3 className="mt-2 text-sm font-medium text-gray-900 dark:text-white">No pages</h3>
-                  <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                    Get started by creating your first page.
-                  </p>
-                </div>
-              )}
+            <div className="p-4 border-b border-gray-200 dark:border-gray-700">
+              <h2 className="text-lg font-medium text-gray-900 dark:text-white">Pages</h2>
             </div>
+            <ul className="divide-y divide-gray-200 dark:divide-gray-700">
+              {pages.map((page) => (
+                <li 
+                  key={page.id}
+                  className={`p-4 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer ${
+                    selectedPage?.id === page.id ? 'bg-indigo-50 dark:bg-indigo-900/20' : ''
+                  }`}
+                  onClick={() => setSelectedPage(page)}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center">
+                      <div className={`flex-shrink-0 h-10 w-10 rounded-md bg-indigo-100 dark:bg-indigo-900 flex items-center justify-center ${
+                        page.is_published ? 'text-indigo-600 dark:text-indigo-400' : 'text-gray-400 dark:text-gray-500'
+                      }`}>
+                        <Layout className="h-6 w-6" />
+                      </div>
+                      <div className="ml-3">
+                        <p className="text-sm font-medium text-gray-900 dark:text-white">{page.name}</p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">/pages/{page.slug}</p>
+                      </div>
+                    </div>
+                    <div className="flex space-x-2">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleTogglePagePublish(page.id, page.is_published);
+                        }}
+                        className={`p-1 rounded-full ${
+                          page.is_published 
+                            ? 'text-green-600 hover:text-green-700 dark:text-green-400 dark:hover:text-green-300' 
+                            : 'text-gray-400 hover:text-gray-500 dark:text-gray-500 dark:hover:text-gray-400'
+                        }`}
+                        title={page.is_published ? 'Unpublish' : 'Publish'}
+                      >
+                        {page.is_published ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleEditPage(page);
+                        }}
+                        className="p-1 rounded-full text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300"
+                        title="Edit"
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeletePage(page.id);
+                        }}
+                        className="p-1 rounded-full text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
+                        title="Delete"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </div>
+                </li>
+              ))}
+              {pages.length === 0 && (
+                <li className="p-6 text-center">
+                  <p className="text-gray-500 dark:text-gray-400">No pages found</p>
+                  <p className="text-sm text-gray-400 dark:text-gray-500 mt-1">
+                    Create your first page to get started
+                  </p>
+                </li>
+              )}
+            </ul>
           </div>
         </div>
 
-        {/* Page Builder */}
-        <div className="lg:col-span-2">
+        {/* Blocks List */}
+        <div className="lg:col-span-3">
           {selectedPage ? (
-            <div className="space-y-6">
-              {/* Page Header */}
-              <div className="bg-white dark:bg-gray-800 shadow sm:rounded-lg">
-                <div className="px-4 py-5 sm:p-6">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h3 className="text-lg leading-6 font-medium text-gray-900 dark:text-white">
-                        {selectedPage.name}
-                      </h3>
-                      <p className="mt-1 max-w-2xl text-sm text-gray-500 dark:text-gray-400">
-                        {selectedPage.description || 'No description'}
-                      </p>
-                    </div>
-                    <div className="flex items-center space-x-3">
-                      <button
-                        onClick={() => togglePagePublish(selectedPage.id, selectedPage.is_published)}
-                        className={`inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md ${
-                          selectedPage.is_published
-                            ? 'bg-green-100 text-green-800 hover:bg-green-200 dark:bg-green-900/30 dark:text-green-300 dark:hover:bg-green-900/50'
-                            : 'bg-gray-100 text-gray-800 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600'
-                        }`}
-                      >
-                        {selectedPage.is_published ? (
-                          <>
-                            <Eye className="h-3 w-3 mr-1" />
-                            Published
-                          </>
-                        ) : (
-                          <>
-                            <EyeOff className="h-3 w-3 mr-1" />
-                            Draft
-                          </>
-                        )}
-                      </button>
-                      
-                      <Link
-                        to={`/pages/${selectedPage.slug}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center px-3 py-1.5 border border-gray-300 text-xs font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 dark:bg-gray-700 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-600"
-                      >
-                        <ExternalLink className="h-3 w-3 mr-1" />
-                        Preview
-                      </Link>
-                      
-                      <button
-                        onClick={() => handleEditPage(selectedPage)}
-                        className="inline-flex items-center px-3 py-1.5 border border-gray-300 text-xs font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 dark:bg-gray-700 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-600"
-                      >
-                        <Pencil className="h-3 w-3 mr-1" />
-                        Edit
-                      </button>
-                    </div>
-                  </div>
+            <div className="bg-white dark:bg-gray-800 shadow sm:rounded-lg">
+              <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
+                <div>
+                  <h2 className="text-lg font-medium text-gray-900 dark:text-white">
+                    {selectedPage.name} Blocks
+                  </h2>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">
+                    {selectedPage.is_published ? 'Published' : 'Draft'} • {blocks.length} blocks
+                  </p>
                 </div>
+                <button
+                  onClick={() => setIsBlockFormOpen(true)}
+                  className="inline-flex items-center px-3 py-1.5 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                >
+                  <Plus className="h-4 w-4 mr-1" />
+                  Add Block
+                </button>
               </div>
 
               {/* Block Form */}
-              {isBlockFormOpen && (
-                <div className="bg-white dark:bg-gray-800 shadow sm:rounded-lg">
-                  <form onSubmit={handleBlockSubmit} className="p-6">
-                    <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-4">
-                      {editingBlock ? 'Edit Block' : 'Add New Block'}
-                    </h3>
-                    
-                    <div className="space-y-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                          Block Title *
-                        </label>
-                        <input
-                          type="text"
-                          name="title"
-                          value={blockFormData.title}
-                          onChange={handleBlockInputChange}
-                          required
-                          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white sm:text-sm py-2.5"
-                          placeholder="e.g., Featured Contest"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                          Description
-                        </label>
-                        <textarea
-                          name="description"
-                          value={blockFormData.description}
-                          onChange={handleBlockInputChange}
-                          rows={2}
-                          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white sm:text-sm"
-                          placeholder="Brief description of this block"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                          Block Type *
-                        </label>
-                        <select
-                          name="block_type"
-                          value={blockFormData.block_type}
-                          onChange={handleBlockInputChange}
-                          required
-                          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white sm:text-sm py-2.5"
-                        >
-                          <option value="text">Text</option>
-                          <option value="analyzer">Analyzer</option>
-                          <option value="contest">Contest</option>
-                          <option value="leaderboard">Leaderboard</option>
-                          <option value="ad">Ad</option>
-                          <option value="custom">Custom Component</option>
-                        </select>
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                          Background Color
-                        </label>
-                        <div className="mt-1 flex items-center">
-                          <input
-                            type="color"
-                            name="background_color"
-                            value={blockFormData.background_color}
-                            onChange={handleBlockInputChange}
-                            className="h-8 w-8 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                          />
-                          <input
-                            type="text"
-                            name="background_color"
-                            value={blockFormData.background_color}
-                            onChange={handleBlockInputChange}
-                            className="ml-2 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white sm:text-sm py-2.5"
-                            placeholder="#ffffff"
-                          />
-                        </div>
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                          Block Content
-                        </label>
-                        <div className="mt-1 p-4 border border-gray-200 dark:border-gray-700 rounded-md">
-                          {getContentFields()}
-                        </div>
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                          Visibility Rules (JSON)
-                        </label>
-                        <textarea
-                          name="visibility_rules"
-                          value={blockFormData.visibility_rules}
-                          onChange={handleBlockInputChange}
-                          rows={3}
-                          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white sm:text-sm font-mono"
-                          placeholder='{"userType": "premium", "minLevel": 5}'
-                        />
-                        <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                          Optional rules to control block visibility
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="mt-6 flex justify-end space-x-3">
-                      <button
-                        type="button"
-                        onClick={resetBlockForm}
-                        className="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-600"
-                      >
-                        <X className="h-4 w-4 mr-2" />
-                        Cancel
-                      </button>
-                      <button
-                        type="submit"
-                        className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                      >
-                        <Save className="h-4 w-4 mr-2" />
-                        {editingBlock ? 'Update' : 'Add'} Block
-                      </button>
-                    </div>
-                  </form>
-                </div>
-              )}
+              {isBlockFormOpen && renderBlockForm()}
 
               {/* Blocks List */}
-              <div className="bg-white dark:bg-gray-800 shadow sm:rounded-lg">
-                <div className="px-4 py-5 sm:p-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-lg leading-6 font-medium text-gray-900 dark:text-white">
-                      Page Blocks
-                    </h3>
-                    <button
-                      onClick={() => setIsBlockFormOpen(true)}
-                      className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+              <DragDropContext onDragEnd={onDragEnd}>
+                <Droppable droppableId="blocks">
+                  {(provided) => (
+                    <div
+                      {...provided.droppableProps}
+                      ref={provided.innerRef}
+                      className="p-4"
                     >
-                      <Plus className="h-3 w-3 mr-1" />
-                      Add Block
-                    </button>
-                  </div>
-                  
-                  {blocks.length > 0 ? (
-                    <div className="space-y-4">
-                      {blocks.map((block, index) => (
-                        <div 
-                          key={block.id}
-                          className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 hover:shadow-md transition-shadow"
-                        >
-                          <div className="flex items-start justify-between">
-                            <div className="flex items-start">
-                              <div className="mr-3">
-                                {getBlockTypeIcon(block.block_type)}
-                              </div>
-                              <div>
-                                <h4 className="text-sm font-medium text-gray-900 dark:text-white">
-                                  {block.title}
-                                </h4>
-                                {block.description && (
-                                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                                    {block.description}
-                                  </p>
-                                )}
-                                <div className="flex items-center mt-1">
-                                  <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300">
-                                    {block.block_type}
-                                  </span>
-                                  {block.background_color && (
-                                    <div className="ml-2 flex items-center">
-                                      <div 
-                                        className="w-3 h-3 rounded-full border border-gray-300 dark:border-gray-600 mr-1"
-                                        style={{ backgroundColor: block.background_color }}
-                                      />
-                                      <span className="text-xs text-gray-500 dark:text-gray-400">
-                                        {block.background_color}
-                                      </span>
+                      {blocks.length > 0 ? (
+                        <div className="space-y-4">
+                          {blocks.map((block, index) => (
+                            <Draggable key={block.id} draggableId={block.id} index={index}>
+                              {(provided) => (
+                                <div
+                                  ref={provided.innerRef}
+                                  {...provided.draggableProps}
+                                  className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden bg-white dark:bg-gray-800 shadow-sm hover:shadow-md transition-shadow"
+                                >
+                                  <div className="p-4">
+                                    <div className="flex items-center justify-between">
+                                      <div className="flex items-center" {...provided.dragHandleProps}>
+                                        <div className="flex-shrink-0 h-10 w-10 rounded-md bg-indigo-100 dark:bg-indigo-900 flex items-center justify-center">
+                                          {getBlockTypeIcon(block.block_type)}
+                                        </div>
+                                        <div className="ml-3">
+                                          <p className="text-sm font-medium text-gray-900 dark:text-white">{block.title}</p>
+                                          <p className="text-xs text-gray-500 dark:text-gray-400">
+                                            {block.block_type.charAt(0).toUpperCase() + block.block_type.slice(1)} • Position: {block.position + 1}
+                                          </p>
+                                        </div>
+                                      </div>
+                                      <div className="flex space-x-2">
+                                        <button
+                                          onClick={() => handleMoveBlock(block.id, 'up')}
+                                          disabled={index === 0}
+                                          className="p-1 rounded-full text-gray-400 hover:text-gray-500 dark:text-gray-500 dark:hover:text-gray-400 disabled:opacity-30"
+                                          title="Move Up"
+                                        >
+                                          <MoveUp className="h-4 w-4" />
+                                        </button>
+                                        <button
+                                          onClick={() => handleMoveBlock(block.id, 'down')}
+                                          disabled={index === blocks.length - 1}
+                                          className="p-1 rounded-full text-gray-400 hover:text-gray-500 dark:text-gray-500 dark:hover:text-gray-400 disabled:opacity-30"
+                                          title="Move Down"
+                                        >
+                                          <MoveDown className="h-4 w-4" />
+                                        </button>
+                                        <button
+                                          onClick={() => handleDuplicateBlock(block)}
+                                          className="p-1 rounded-full text-gray-400 hover:text-gray-500 dark:text-gray-500 dark:hover:text-gray-400"
+                                          title="Duplicate"
+                                        >
+                                          <Copy className="h-4 w-4" />
+                                        </button>
+                                        <button
+                                          onClick={() => handleEditBlock(block)}
+                                          className="p-1 rounded-full text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300"
+                                          title="Edit"
+                                        >
+                                          <Pencil className="h-4 w-4" />
+                                        </button>
+                                        <button
+                                          onClick={() => handleDeleteBlock(block.id)}
+                                          className="p-1 rounded-full text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
+                                          title="Delete"
+                                        >
+                                          <Trash2 className="h-4 w-4" />
+                                        </button>
+                                      </div>
                                     </div>
-                                  )}
+                                    
+                                    {/* Block Preview */}
+                                    <div className="mt-3 border-t border-gray-200 dark:border-gray-700 pt-3">
+                                      <div className="text-xs text-gray-500 dark:text-gray-400 mb-2">
+                                        {block.description && (
+                                          <p className="mb-1">{block.description}</p>
+                                        )}
+                                        
+                                        {/* Block-specific preview */}
+                                        {block.block_type === 'analyzer' && (
+                                          <div className="flex items-center space-x-2">
+                                            <Bot className="h-3 w-3" />
+                                            <span>
+                                              {block.content?.model_id 
+                                                ? `Specific model: ${aiModels.find(m => m.id === block.content.model_id)?.name || 'Unknown'}`
+                                                : 'Any model'}
+                                            </span>
+                                            {block.content?.token_cost && (
+                                              <>
+                                                <Coins className="h-3 w-3" />
+                                                <span>{block.content.token_cost} tokens</span>
+                                              </>
+                                            )}
+                                          </div>
+                                        )}
+                                        
+                                        {block.block_type === 'contest' && (
+                                          <div className="flex items-center space-x-2">
+                                            <Trophy className="h-3 w-3" />
+                                            <span>
+                                              {block.content?.contest_id 
+                                                ? `Contest: ${contests.find(c => c.id === block.content.contest_id)?.title || 'Unknown'}`
+                                                : 'No specific contest'}
+                                            </span>
+                                          </div>
+                                        )}
+                                        
+                                        {block.block_type === 'leaderboard' && (
+                                          <div className="flex items-center space-x-2">
+                                            <BarChart2 className="h-3 w-3" />
+                                            <span>
+                                              {block.content?.sport ? `Sport: ${block.content.sport}` : 'All sports'} • 
+                                              Limit: {block.content?.limit || 10} • 
+                                              Period: {block.content?.timePeriod || 'All time'}
+                                            </span>
+                                          </div>
+                                        )}
+                                        
+                                        {block.block_type === 'ad' && (
+                                          <div className="flex items-center space-x-2">
+                                            <MonitorPlay className="h-3 w-3" />
+                                            <span>
+                                              Placement: {block.content?.placement || 'Default'} • 
+                                              {block.content?.sportCategory ? `Sport: ${block.content.sportCategory}` : 'All sports'}
+                                            </span>
+                                          </div>
+                                        )}
+                                        
+                                        {block.block_type === 'text' && (
+                                          <div className="flex items-center space-x-2">
+                                            <Type className="h-3 w-3" />
+                                            <span>
+                                              Size: {block.content?.textSize || 'Medium'} • 
+                                              {block.content?.text ? `${block.content.text.substring(0, 30)}...` : 'No text'}
+                                            </span>
+                                          </div>
+                                        )}
+                                        
+                                        {block.block_type === 'custom' && (
+                                          <div className="flex items-center space-x-2">
+                                            <Puzzle className="h-3 w-3" />
+                                            <span>
+                                              Component: {block.content?.component || 'None selected'}
+                                            </span>
+                                          </div>
+                                        )}
+                                      </div>
+                                      
+                                      {/* Visibility Rules Preview */}
+                                      {Object.keys(block.visibility_rules || {}).length > 0 && (
+                                        <div className="flex flex-wrap gap-2 mt-2">
+                                          {block.visibility_rules.sport && (
+                                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">
+                                              <Target className="h-3 w-3 mr-1" />
+                                              Sport: {block.visibility_rules.sport}
+                                            </span>
+                                          )}
+                                          
+                                          {block.visibility_rules.userStatus && (
+                                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300">
+                                              <Users className="h-3 w-3 mr-1" />
+                                              {block.visibility_rules.userStatus} users
+                                            </span>
+                                          )}
+                                          
+                                          {(block.visibility_rules.startDate || block.visibility_rules.endDate) && (
+                                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300">
+                                              <Calendar className="h-3 w-3 mr-1" />
+                                              Date restricted
+                                            </span>
+                                          )}
+                                          
+                                          {block.visibility_rules.requiresTokens && (
+                                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300">
+                                              <Coins className="h-3 w-3 mr-1" />
+                                              {block.visibility_rules.tokenCost || 1} tokens
+                                            </span>
+                                          )}
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
                                 </div>
-                              </div>
-                            </div>
-                            <div className="flex items-center space-x-2">
-                              <button
-                                onClick={() => moveBlock(block.id, 'up')}
-                                disabled={index === 0}
-                                className={`p-1 rounded ${
-                                  index === 0
-                                    ? 'text-gray-300 dark:text-gray-600 cursor-not-allowed'
-                                    : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'
-                                }`}
-                                title="Move Up"
-                              >
-                                <ArrowUp className="h-4 w-4" />
-                              </button>
-                              <button
-                                onClick={() => moveBlock(block.id, 'down')}
-                                disabled={index === blocks.length - 1}
-                                className={`p-1 rounded ${
-                                  index === blocks.length - 1
-                                    ? 'text-gray-300 dark:text-gray-600 cursor-not-allowed'
-                                    : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'
-                                }`}
-                                title="Move Down"
-                              >
-                                <ArrowDown className="h-4 w-4" />
-                              </button>
-                              <button
-                                onClick={() => duplicateBlock(block)}
-                                className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
-                                title="Duplicate"
-                              >
-                                <Copy className="h-4 w-4" />
-                              </button>
-                              <button
-                                onClick={() => handleEditBlock(block)}
-                                className="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300"
-                                title="Edit"
-                              >
-                                <Pencil className="h-4 w-4" />
-                              </button>
-                              <button
-                                onClick={() => handleDeleteBlock(block.id)}
-                                className="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300"
-                                title="Delete"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </button>
-                            </div>
+                              )}
+                            </Draggable>
+                          ))}
+                          {provided.placeholder}
+                        </div>
+                      ) : (
+                        <div className="text-center py-12">
+                          <Layers className="mx-auto h-12 w-12 text-gray-400" />
+                          <h3 className="mt-2 text-sm font-medium text-gray-900 dark:text-white">No blocks</h3>
+                          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                            Get started by adding your first block to this page.
+                          </p>
+                          <div className="mt-6">
+                            <button
+                              onClick={() => setIsBlockFormOpen(true)}
+                              className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                            >
+                              <Plus className="h-4 w-4 mr-2" />
+                              Add Block
+                            </button>
                           </div>
                         </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="text-center py-6">
-                      <Layers className="mx-auto h-12 w-12 text-gray-400" />
-                      <h3 className="mt-2 text-sm font-medium text-gray-900 dark:text-white">No blocks</h3>
-                      <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                        Get started by adding your first block to this page.
-                      </p>
+                      )}
                     </div>
                   )}
-                </div>
-              </div>
+                </Droppable>
+              </DragDropContext>
             </div>
           ) : (
             <div className="bg-white dark:bg-gray-800 shadow sm:rounded-lg p-12 text-center">
-              <Layout className="mx-auto h-16 w-16 text-gray-400 mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">No Page Selected</h3>
-              <p className="text-gray-500 dark:text-gray-400 mb-6">
-                Select a page from the list or create a new one to start building.
+              <Layout className="mx-auto h-12 w-12 text-gray-400" />
+              <h3 className="mt-2 text-sm font-medium text-gray-900 dark:text-white">No page selected</h3>
+              <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                Select a page from the list or create a new one to get started.
               </p>
-              <button
-                onClick={() => setIsPageFormOpen(true)}
-                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-              >
-                <Plus className="h-4 w-4 mr-2" />
-                Create New Page
-              </button>
+              <div className="mt-6">
+                <button
+                  onClick={() => setIsPageFormOpen(true)}
+                  className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Create Page
+                </button>
+              </div>
             </div>
           )}
         </div>
