@@ -5,21 +5,22 @@ import {
   Trash2, 
   Save, 
   X, 
+  Layout, 
   Eye, 
   EyeOff, 
-  Layout, 
-  Move, 
   ArrowUp, 
-  ArrowDown,
-  Copy,
+  ArrowDown, 
+  Copy, 
   ExternalLink,
   Palette,
   Settings,
   Layers,
   FileText,
   BarChart2,
-  Trophy,
+  Image,
+  MessageSquare,
   Target,
+  Award,
   MonitorPlay
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
@@ -31,6 +32,7 @@ interface PageLayout {
   slug: string;
   description: string | null;
   is_published: boolean;
+  created_by: string | null;
   created_at: string;
   updated_at: string;
   metadata: any;
@@ -46,8 +48,6 @@ interface UIBlock {
   position: number;
   background_color: string | null;
   visibility_rules: any;
-  created_at: string;
-  updated_at: string;
 }
 
 interface AIModel {
@@ -67,8 +67,8 @@ interface Ad {
 
 const PageBuilder: React.FC = () => {
   const [pages, setPages] = useState<PageLayout[]>([]);
-  const [blocks, setBlocks] = useState<UIBlock[]>([]);
   const [selectedPage, setSelectedPage] = useState<PageLayout | null>(null);
+  const [blocks, setBlocks] = useState<UIBlock[]>([]);
   const [isPageFormOpen, setIsPageFormOpen] = useState(false);
   const [isBlockFormOpen, setIsBlockFormOpen] = useState(false);
   const [editingPage, setEditingPage] = useState<PageLayout | null>(null);
@@ -95,7 +95,6 @@ const PageBuilder: React.FC = () => {
   const [ads, setAds] = useState<Ad[]>([]);
   
   const [loading, setLoading] = useState(true);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
   useEffect(() => {
     fetchPages();
@@ -105,8 +104,6 @@ const PageBuilder: React.FC = () => {
   useEffect(() => {
     if (selectedPage) {
       fetchBlocks(selectedPage.id);
-    } else {
-      setBlocks([]);
     }
   }, [selectedPage]);
 
@@ -145,31 +142,28 @@ const PageBuilder: React.FC = () => {
   const fetchReferenceData = async () => {
     try {
       // Fetch AI models
-      const { data: modelData, error: modelError } = await supabase
+      const { data: modelsData } = await supabase
         .from('ai_models')
         .select('id, name')
         .eq('is_active', true);
-
-      if (modelError) throw modelError;
-      setAiModels(modelData || []);
-
+      
+      setAiModels(modelsData || []);
+      
       // Fetch contests
-      const { data: contestData, error: contestError } = await supabase
+      const { data: contestsData } = await supabase
         .from('contests')
         .select('id, title')
         .eq('status', 'active');
-
-      if (contestError) throw contestError;
-      setContests(contestData || []);
-
+      
+      setContests(contestsData || []);
+      
       // Fetch ads
-      const { data: adData, error: adError } = await supabase
+      const { data: adsData } = await supabase
         .from('ads')
         .select('id, title')
         .eq('is_active', true);
-
-      if (adError) throw adError;
-      setAds(adData || []);
+      
+      setAds(adsData || []);
     } catch (error) {
       console.error('Error fetching reference data:', error);
     }
@@ -223,11 +217,10 @@ const PageBuilder: React.FC = () => {
   const handlePageSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      let metadata = {};
+      let metadata;
       try {
         metadata = JSON.parse(pageFormData.metadata);
       } catch (error) {
-        console.error('Invalid JSON in metadata:', error);
         alert('Invalid JSON in metadata field');
         return;
       }
@@ -255,7 +248,6 @@ const PageBuilder: React.FC = () => {
 
         if (error) throw error;
         
-        // Select the newly created page
         if (data && data.length > 0) {
           setSelectedPage(data[0]);
         }
@@ -278,13 +270,12 @@ const PageBuilder: React.FC = () => {
     }
     
     try {
-      let content = {};
-      let visibilityRules = {};
+      let content;
+      let visibilityRules;
       
       try {
         content = JSON.parse(blockFormData.content);
       } catch (error) {
-        console.error('Invalid JSON in content:', error);
         alert('Invalid JSON in content field');
         return;
       }
@@ -292,7 +283,6 @@ const PageBuilder: React.FC = () => {
       try {
         visibilityRules = JSON.parse(blockFormData.visibility_rules);
       } catch (error) {
-        console.error('Invalid JSON in visibility rules:', error);
         alert('Invalid JSON in visibility rules field');
         return;
       }
@@ -334,9 +324,11 @@ const PageBuilder: React.FC = () => {
   const handleEditPage = (page: PageLayout) => {
     let metadataStr = '{}';
     try {
-      metadataStr = JSON.stringify(page.metadata, null, 2);
-    } catch (error) {
-      console.error('Error stringifying metadata:', error);
+      metadataStr = typeof page.metadata === 'string' 
+        ? page.metadata 
+        : JSON.stringify(page.metadata, null, 2);
+    } catch (e) {
+      console.error('Error parsing metadata:', e);
     }
     
     setPageFormData({
@@ -355,15 +347,19 @@ const PageBuilder: React.FC = () => {
     let visibilityRulesStr = '{}';
     
     try {
-      contentStr = JSON.stringify(block.content, null, 2);
-    } catch (error) {
-      console.error('Error stringifying content:', error);
+      contentStr = typeof block.content === 'string' 
+        ? block.content 
+        : JSON.stringify(block.content, null, 2);
+    } catch (e) {
+      console.error('Error parsing content:', e);
     }
     
     try {
-      visibilityRulesStr = JSON.stringify(block.visibility_rules, null, 2);
-    } catch (error) {
-      console.error('Error stringifying visibility rules:', error);
+      visibilityRulesStr = typeof block.visibility_rules === 'string' 
+        ? block.visibility_rules 
+        : JSON.stringify(block.visibility_rules, null, 2);
+    } catch (e) {
+      console.error('Error parsing visibility rules:', e);
     }
     
     setBlockFormData({
@@ -421,7 +417,7 @@ const PageBuilder: React.FC = () => {
     }
   };
 
-  const togglePageStatus = async (id: string, currentStatus: boolean) => {
+  const togglePagePublish = async (id: string, currentStatus: boolean) => {
     try {
       const { error } = await supabase
         .from('page_layouts')
@@ -429,6 +425,7 @@ const PageBuilder: React.FC = () => {
         .eq('id', id);
 
       if (error) throw error;
+      
       await fetchPages();
       
       if (selectedPage?.id === id) {
@@ -447,7 +444,7 @@ const PageBuilder: React.FC = () => {
     const newBlocks = [...blocks];
     
     if (direction === 'up' && blockIndex > 0) {
-      // Swap with the block above
+      // Swap with previous block
       const temp = newBlocks[blockIndex].position;
       newBlocks[blockIndex].position = newBlocks[blockIndex - 1].position;
       newBlocks[blockIndex - 1].position = temp;
@@ -465,7 +462,7 @@ const PageBuilder: React.FC = () => {
             .eq('id', newBlocks[blockIndex - 1].id)
         ]);
         
-        // Refresh blocks
+        // Re-fetch blocks to ensure correct order
         if (selectedPage) {
           await fetchBlocks(selectedPage.id);
         }
@@ -474,7 +471,7 @@ const PageBuilder: React.FC = () => {
         alert('Error moving block');
       }
     } else if (direction === 'down' && blockIndex < newBlocks.length - 1) {
-      // Swap with the block below
+      // Swap with next block
       const temp = newBlocks[blockIndex].position;
       newBlocks[blockIndex].position = newBlocks[blockIndex + 1].position;
       newBlocks[blockIndex + 1].position = temp;
@@ -492,7 +489,7 @@ const PageBuilder: React.FC = () => {
             .eq('id', newBlocks[blockIndex + 1].id)
         ]);
         
-        // Refresh blocks
+        // Re-fetch blocks to ensure correct order
         if (selectedPage) {
           await fetchBlocks(selectedPage.id);
         }
@@ -511,15 +508,13 @@ const PageBuilder: React.FC = () => {
         ...block,
         id: undefined,
         title: `${block.title} (Copy)`,
-        position: blocks.length,
-        created_at: undefined,
-        updated_at: undefined
+        position: blocks.length
       };
       
       const { error } = await supabase
         .from('ui_blocks')
         .insert([newBlock]);
-
+      
       if (error) throw error;
       
       await fetchBlocks(selectedPage.id);
@@ -529,36 +524,15 @@ const PageBuilder: React.FC = () => {
     }
   };
 
-  const previewPage = (slug: string) => {
-    // In a real implementation, this would open a preview of the page
-    // For now, we'll just set a URL that could be used
-    setPreviewUrl(`/preview/${slug}`);
-    setTimeout(() => {
-      setPreviewUrl(null);
-    }, 3000);
-  };
-
   const getBlockTypeIcon = (type: UIBlock['block_type']) => {
     switch (type) {
-      case 'analyzer': return <BarChart2 className="h-4 w-4" />;
-      case 'contest': return <Trophy className="h-4 w-4" />;
-      case 'leaderboard': return <Target className="h-4 w-4" />;
-      case 'ad': return <MonitorPlay className="h-4 w-4" />;
-      case 'text': return <FileText className="h-4 w-4" />;
-      case 'custom': return <Layers className="h-4 w-4" />;
-      default: return <Layers className="h-4 w-4" />;
-    }
-  };
-
-  const getBlockTypeLabel = (type: UIBlock['block_type']) => {
-    switch (type) {
-      case 'analyzer': return 'Analyzer Card';
-      case 'contest': return 'Contest Card';
-      case 'leaderboard': return 'Leaderboard';
-      case 'ad': return 'Ad Block';
-      case 'text': return 'Static Text';
-      case 'custom': return 'Custom Component';
-      default: return type;
+      case 'analyzer': return <Brain className="h-5 w-5 text-blue-500" />;
+      case 'contest': return <Target className="h-5 w-5 text-green-500" />;
+      case 'leaderboard': return <Award className="h-5 w-5 text-yellow-500" />;
+      case 'ad': return <MonitorPlay className="h-5 w-5 text-red-500" />;
+      case 'text': return <MessageSquare className="h-5 w-5 text-purple-500" />;
+      case 'custom': return <Settings className="h-5 w-5 text-indigo-500" />;
+      default: return <Layers className="h-5 w-5 text-gray-500" />;
     }
   };
 
@@ -589,24 +563,23 @@ const PageBuilder: React.FC = () => {
                 ))}
               </select>
             </div>
-            <div className="mt-3">
-              <label className="flex items-center">
-                <input
-                  type="checkbox"
-                  className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
-                  checked={JSON.parse(blockFormData.content || '{}').showUploadButton || false}
-                  onChange={(e) => {
-                    const content = JSON.parse(blockFormData.content || '{}');
-                    content.showUploadButton = e.target.checked;
-                    setBlockFormData({
-                      ...blockFormData,
-                      content: JSON.stringify(content, null, 2)
-                    });
-                  }}
-                />
-                <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">
-                  Show Upload Button
-                </span>
+            <div className="flex items-center mt-2">
+              <input
+                type="checkbox"
+                id="showUploadButton"
+                className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                checked={JSON.parse(blockFormData.content || '{}').showUploadButton || false}
+                onChange={(e) => {
+                  const content = JSON.parse(blockFormData.content || '{}');
+                  content.showUploadButton = e.target.checked;
+                  setBlockFormData({
+                    ...blockFormData,
+                    content: JSON.stringify(content, null, 2)
+                  });
+                }}
+              />
+              <label htmlFor="showUploadButton" className="ml-2 block text-sm text-gray-700 dark:text-gray-300">
+                Show Upload Button
               </label>
             </div>
           </>
@@ -637,24 +610,23 @@ const PageBuilder: React.FC = () => {
                 ))}
               </select>
             </div>
-            <div className="mt-3">
-              <label className="flex items-center">
-                <input
-                  type="checkbox"
-                  className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
-                  checked={JSON.parse(blockFormData.content || '{}').showPrizePool || false}
-                  onChange={(e) => {
-                    const content = JSON.parse(blockFormData.content || '{}');
-                    content.showPrizePool = e.target.checked;
-                    setBlockFormData({
-                      ...blockFormData,
-                      content: JSON.stringify(content, null, 2)
-                    });
-                  }}
-                />
-                <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">
-                  Show Prize Pool
-                </span>
+            <div className="flex items-center mt-2">
+              <input
+                type="checkbox"
+                id="showPrizePool"
+                className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                checked={JSON.parse(blockFormData.content || '{}').showPrizePool || false}
+                onChange={(e) => {
+                  const content = JSON.parse(blockFormData.content || '{}');
+                  content.showPrizePool = e.target.checked;
+                  setBlockFormData({
+                    ...blockFormData,
+                    content: JSON.stringify(content, null, 2)
+                  });
+                }}
+              />
+              <label htmlFor="showPrizePool" className="ml-2 block text-sm text-gray-700 dark:text-gray-300">
+                Show Prize Pool
               </label>
             </div>
           </>
@@ -667,36 +639,30 @@ const PageBuilder: React.FC = () => {
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                 Sport Filter
               </label>
-              <select
+              <input
+                type="text"
                 className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                placeholder="e.g., NFL, NBA, or leave empty for all"
+                value={JSON.parse(blockFormData.content || '{}').sport || ''}
                 onChange={(e) => {
                   const content = JSON.parse(blockFormData.content || '{}');
-                  content.sport = e.target.value || null;
+                  content.sport = e.target.value;
                   setBlockFormData({
                     ...blockFormData,
                     content: JSON.stringify(content, null, 2)
                   });
                 }}
-                value={JSON.parse(blockFormData.content || '{}').sport || ''}
-              >
-                <option value="">All Sports</option>
-                <option value="NFL">NFL</option>
-                <option value="NBA">NBA</option>
-                <option value="MLB">MLB</option>
-                <option value="NHL">NHL</option>
-                <option value="Soccer">Soccer</option>
-              </select>
+              />
             </div>
-            <div className="mt-3">
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Entries Limit
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 mt-2">
+                Entry Limit
               </label>
               <input
                 type="number"
                 className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                min="1"
-                max="100"
-                value={JSON.parse(blockFormData.content || '{}').limit || 10}
+                placeholder="Number of entries to show"
+                value={JSON.parse(blockFormData.content || '{}').limit || '10'}
                 onChange={(e) => {
                   const content = JSON.parse(blockFormData.content || '{}');
                   content.limit = parseInt(e.target.value) || 10;
@@ -721,13 +687,13 @@ const PageBuilder: React.FC = () => {
                 className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                 onChange={(e) => {
                   const content = JSON.parse(blockFormData.content || '{}');
-                  content.ad_id = e.target.value || null;
+                  content.campaign_id = e.target.value || null;
                   setBlockFormData({
                     ...blockFormData,
                     content: JSON.stringify(content, null, 2)
                   });
                 }}
-                value={JSON.parse(blockFormData.content || '{}').ad_id || ''}
+                value={JSON.parse(blockFormData.content || '{}').campaign_id || ''}
               >
                 <option value="">Select an ad campaign</option>
                 {ads.map(ad => (
@@ -735,8 +701,8 @@ const PageBuilder: React.FC = () => {
                 ))}
               </select>
             </div>
-            <div className="mt-3">
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 mt-2">
                 Placement Type
               </label>
               <select
@@ -769,6 +735,7 @@ const PageBuilder: React.FC = () => {
               <textarea
                 className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                 rows={4}
+                placeholder="Enter text content"
                 value={JSON.parse(blockFormData.content || '{}').text || ''}
                 onChange={(e) => {
                   const content = JSON.parse(blockFormData.content || '{}');
@@ -778,11 +745,10 @@ const PageBuilder: React.FC = () => {
                     content: JSON.stringify(content, null, 2)
                   });
                 }}
-                placeholder="Enter text content here..."
               />
             </div>
-            <div className="mt-3">
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 mt-2">
                 Text Size
               </label>
               <select
@@ -815,6 +781,7 @@ const PageBuilder: React.FC = () => {
               <input
                 type="text"
                 className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                placeholder="e.g., UserPicks, RecentActivity"
                 value={JSON.parse(blockFormData.content || '{}').component || ''}
                 onChange={(e) => {
                   const content = JSON.parse(blockFormData.content || '{}');
@@ -824,7 +791,31 @@ const PageBuilder: React.FC = () => {
                     content: JSON.stringify(content, null, 2)
                   });
                 }}
-                placeholder="e.g., UserPicks, RecentActivity"
+              />
+            </div>
+            <div className="mt-2">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Component Props (JSON)
+              </label>
+              <textarea
+                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white font-mono text-sm"
+                rows={4}
+                placeholder='{"limit": 5, "showHeader": true}'
+                value={JSON.stringify(JSON.parse(blockFormData.content || '{}').props || {}, null, 2)}
+                onChange={(e) => {
+                  try {
+                    const props = JSON.parse(e.target.value);
+                    const content = JSON.parse(blockFormData.content || '{}');
+                    content.props = props;
+                    setBlockFormData({
+                      ...blockFormData,
+                      content: JSON.stringify(content, null, 2)
+                    });
+                  } catch (error) {
+                    // Don't update if invalid JSON
+                    console.error('Invalid JSON:', error);
+                  }
+                }}
               />
             </div>
           </>
@@ -837,12 +828,10 @@ const PageBuilder: React.FC = () => {
               Content (JSON)
             </label>
             <textarea
-              name="content"
-              value={blockFormData.content}
-              onChange={handleBlockInputChange}
-              rows={5}
               className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white font-mono text-sm"
-              placeholder="{}"
+              rows={6}
+              value={blockFormData.content}
+              onChange={(e) => setBlockFormData({ ...blockFormData, content: e.target.value })}
             />
           </div>
         );
@@ -870,311 +859,273 @@ const PageBuilder: React.FC = () => {
         </button>
       </div>
 
-      {previewUrl && (
-        <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4 flex items-center justify-between">
-          <div className="flex items-center">
-            <Eye className="h-5 w-5 text-green-500 mr-2" />
-            <span className="text-green-700 dark:text-green-300">
-              Preview available at: <span className="font-medium">{previewUrl}</span>
-            </span>
-          </div>
-          <button
-            onClick={() => setPreviewUrl(null)}
-            className="text-green-700 dark:text-green-300 hover:text-green-900 dark:hover:text-green-100"
-          >
-            <X className="h-5 w-5" />
-          </button>
-        </div>
-      )}
-
-      {/* Page Form */}
-      {isPageFormOpen && (
-        <div className="bg-white dark:bg-gray-800 shadow sm:rounded-lg">
-          <form onSubmit={handlePageSubmit} className="p-6">
-            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                  Page Name *
-                </label>
-                <input
-                  type="text"
-                  name="name"
-                  value={pageFormData.name}
-                  onChange={handlePageInputChange}
-                  required
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white sm:text-sm py-2.5"
-                  placeholder="e.g., NFL Dashboard"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                  URL Path *
-                </label>
-                <div className="mt-1 flex rounded-md shadow-sm">
-                  <span className="inline-flex items-center px-3 rounded-l-md border border-r-0 border-gray-300 bg-gray-50 text-gray-500 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-300 sm:text-sm">
-                    /
-                  </span>
-                  <input
-                    type="text"
-                    name="slug"
-                    value={pageFormData.slug}
-                    onChange={handlePageInputChange}
-                    required
-                    className="block w-full rounded-none rounded-r-md border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white sm:text-sm py-2.5"
-                    placeholder="nfl-dashboard"
-                  />
-                </div>
-              </div>
-
-              <div className="sm:col-span-2">
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                  Description
-                </label>
-                <textarea
-                  name="description"
-                  value={pageFormData.description}
-                  onChange={handlePageInputChange}
-                  rows={3}
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white sm:text-sm"
-                  placeholder="Describe the purpose of this page"
-                />
-              </div>
-
-              <div className="sm:col-span-2">
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                  Metadata (JSON)
-                </label>
-                <textarea
-                  name="metadata"
-                  value={pageFormData.metadata}
-                  onChange={handlePageInputChange}
-                  rows={3}
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white sm:text-sm font-mono"
-                  placeholder='{"icon": "home", "showInNav": true}'
-                />
-                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                  Optional JSON metadata for additional page configuration
-                </p>
-              </div>
-
-              <div className="flex items-center">
-                <input
-                  type="checkbox"
-                  name="is_published"
-                  checked={pageFormData.is_published}
-                  onChange={handlePageInputChange}
-                  className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
-                />
-                <label className="ml-2 block text-sm text-gray-700 dark:text-gray-300">
-                  Published (visible to users)
-                </label>
-              </div>
-            </div>
-
-            <div className="mt-6 flex justify-end space-x-3">
-              <button
-                type="button"
-                onClick={resetPageForm}
-                className="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-600"
-              >
-                <X className="h-4 w-4 mr-2" />
-                Cancel
-              </button>
-              <button
-                type="submit"
-                className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-              >
-                <Save className="h-4 w-4 mr-2" />
-                {editingPage ? 'Update' : 'Create'} Page
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
-
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Pages List */}
         <div className="lg:col-span-1">
-          <div className="bg-white dark:bg-gray-800 shadow overflow-hidden sm:rounded-lg">
-            <div className="px-4 py-5 sm:px-6 flex justify-between items-center">
-              <h3 className="text-lg leading-6 font-medium text-gray-900 dark:text-white">
-                Pages
-              </h3>
-              <span className="text-sm text-gray-500 dark:text-gray-400">
-                {pages.length} total
-              </span>
-            </div>
-            <ul className="divide-y divide-gray-200 dark:divide-gray-700">
-              {pages.map((page) => (
-                <li 
-                  key={page.id}
-                  className={`hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer transition-colors ${
-                    selectedPage?.id === page.id ? 'bg-indigo-50 dark:bg-indigo-900/20' : ''
-                  }`}
-                  onClick={() => setSelectedPage(page)}
-                >
-                  <div className="px-4 py-4 sm:px-6">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center">
-                        <p className="text-sm font-medium text-indigo-600 dark:text-indigo-400 truncate">
-                          {page.name}
-                        </p>
-                        <span className={`ml-2 px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                          page.is_published
-                            ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
-                            : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300'
-                        }`}>
-                          {page.is_published ? 'Published' : 'Draft'}
-                        </span>
-                      </div>
-                      <div className="flex space-x-2">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            togglePageStatus(page.id, page.is_published);
-                          }}
-                          className="text-gray-400 hover:text-gray-500 dark:text-gray-400 dark:hover:text-gray-300"
-                          title={page.is_published ? 'Unpublish' : 'Publish'}
-                        >
-                          {page.is_published ? (
-                            <EyeOff className="h-4 w-4" />
-                          ) : (
-                            <Eye className="h-4 w-4" />
-                          )}
-                        </button>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleEditPage(page);
-                          }}
-                          className="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300"
-                          title="Edit"
-                        >
-                          <Pencil className="h-4 w-4" />
-                        </button>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleDeletePage(page.id);
-                          }}
-                          className="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300"
-                          title="Delete"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      </div>
-                    </div>
-                    <div className="mt-2 sm:flex sm:justify-between">
-                      <div className="sm:flex">
-                        <p className="flex items-center text-sm text-gray-500 dark:text-gray-400">
-                          /{page.slug}
-                        </p>
-                      </div>
-                      <div className="mt-2 flex items-center text-sm text-gray-500 dark:text-gray-400 sm:mt-0">
-                        <p>
-                          Created {new Date(page.created_at).toLocaleDateString()}
-                        </p>
-                      </div>
-                    </div>
+          {/* Page Form */}
+          {isPageFormOpen && (
+            <div className="bg-white dark:bg-gray-800 shadow sm:rounded-lg mb-6">
+              <form onSubmit={handlePageSubmit} className="p-6">
+                <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-4">
+                  {editingPage ? 'Edit Page' : 'Create New Page'}
+                </h3>
+                
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                      Page Name *
+                    </label>
+                    <input
+                      type="text"
+                      name="name"
+                      value={pageFormData.name}
+                      onChange={handlePageInputChange}
+                      required
+                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white sm:text-sm py-2.5"
+                      placeholder="e.g., NFL Dashboard"
+                    />
                   </div>
-                </li>
-              ))}
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                      URL Slug *
+                    </label>
+                    <div className="mt-1 flex rounded-md shadow-sm">
+                      <span className="inline-flex items-center px-3 rounded-l-md border border-r-0 border-gray-300 bg-gray-50 text-gray-500 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-300 sm:text-sm">
+                        /pages/
+                      </span>
+                      <input
+                        type="text"
+                        name="slug"
+                        value={pageFormData.slug}
+                        onChange={handlePageInputChange}
+                        required
+                        className="flex-1 block w-full rounded-none rounded-r-md border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white sm:text-sm py-2.5"
+                        placeholder="nfl-dashboard"
+                      />
+                    </div>
+                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                      URL-friendly name (lowercase, no spaces)
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                      Description
+                    </label>
+                    <textarea
+                      name="description"
+                      value={pageFormData.description}
+                      onChange={handlePageInputChange}
+                      rows={3}
+                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white sm:text-sm"
+                      placeholder="Brief description of this page"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                      Metadata (JSON)
+                    </label>
+                    <textarea
+                      name="metadata"
+                      value={pageFormData.metadata}
+                      onChange={handlePageInputChange}
+                      rows={3}
+                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white sm:text-sm font-mono"
+                      placeholder='{"icon": "home", "showInNav": true}'
+                    />
+                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                      Use "showInNav": true to display in navigation
+                    </p>
+                  </div>
+
+                  <div className="flex items-center">
+                    <input
+                      type="checkbox"
+                      name="is_published"
+                      checked={pageFormData.is_published}
+                      onChange={handlePageInputChange}
+                      className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                    />
+                    <label className="ml-2 block text-sm text-gray-700 dark:text-gray-300">
+                      Published (visible to users)
+                    </label>
+                  </div>
+                </div>
+
+                <div className="mt-6 flex justify-end space-x-3">
+                  <button
+                    type="button"
+                    onClick={resetPageForm}
+                    className="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-600"
+                  >
+                    <X className="h-4 w-4 mr-2" />
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                  >
+                    <Save className="h-4 w-4 mr-2" />
+                    {editingPage ? 'Update' : 'Create'} Page
+                  </button>
+                </div>
+              </form>
+            </div>
+          )}
+
+          {/* Pages List */}
+          <div className="bg-white dark:bg-gray-800 shadow sm:rounded-lg">
+            <div className="px-4 py-5 sm:p-6">
+              <h3 className="text-lg leading-6 font-medium text-gray-900 dark:text-white mb-4">
+                Your Pages
+              </h3>
               
-              {pages.length === 0 && (
-                <li className="px-4 py-12 text-center">
+              {pages.length > 0 ? (
+                <ul className="divide-y divide-gray-200 dark:divide-gray-700">
+                  {pages.map((page) => (
+                    <li 
+                      key={page.id}
+                      className={`py-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 ${
+                        selectedPage?.id === page.id ? 'bg-indigo-50 dark:bg-indigo-900/20' : ''
+                      }`}
+                      onClick={() => setSelectedPage(page)}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                            {page.name}
+                          </p>
+                          <p className="text-sm text-gray-500 dark:text-gray-400 truncate">
+                            /pages/{page.slug}
+                          </p>
+                          <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+                            Created: {new Date(page.created_at).toLocaleDateString()}
+                          </p>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              togglePagePublish(page.id, page.is_published);
+                            }}
+                            className={`p-1 rounded ${
+                              page.is_published
+                                ? 'text-green-600 hover:text-green-700 dark:text-green-400 dark:hover:text-green-300'
+                                : 'text-gray-400 hover:text-gray-500 dark:text-gray-500 dark:hover:text-gray-400'
+                            }`}
+                            title={page.is_published ? 'Unpublish' : 'Publish'}
+                          >
+                            {page.is_published ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleEditPage(page);
+                            }}
+                            className="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300"
+                            title="Edit"
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeletePage(page.id);
+                            }}
+                            className="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300"
+                            title="Delete"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <div className="text-center py-6">
                   <Layout className="mx-auto h-12 w-12 text-gray-400" />
                   <h3 className="mt-2 text-sm font-medium text-gray-900 dark:text-white">No pages</h3>
                   <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                    Get started by creating a new page.
+                    Get started by creating your first page.
                   </p>
-                  <div className="mt-6">
-                    <button
-                      type="button"
-                      onClick={() => setIsPageFormOpen(true)}
-                      className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                    >
-                      <Plus className="-ml-1 mr-2 h-5 w-5" />
-                      New Page
-                    </button>
-                  </div>
-                </li>
+                </div>
               )}
-            </ul>
+            </div>
           </div>
         </div>
 
         {/* Page Builder */}
         <div className="lg:col-span-2">
           {selectedPage ? (
-            <div className="space-y-4">
+            <div className="space-y-6">
               {/* Page Header */}
-              <div className="bg-white dark:bg-gray-800 shadow sm:rounded-lg p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
-                      {selectedPage.name}
-                    </h2>
-                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                      /{selectedPage.slug}
-                    </p>
+              <div className="bg-white dark:bg-gray-800 shadow sm:rounded-lg">
+                <div className="px-4 py-5 sm:p-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="text-lg leading-6 font-medium text-gray-900 dark:text-white">
+                        {selectedPage.name}
+                      </h3>
+                      <p className="mt-1 max-w-2xl text-sm text-gray-500 dark:text-gray-400">
+                        {selectedPage.description || 'No description'}
+                      </p>
+                    </div>
+                    <div className="flex items-center space-x-3">
+                      <button
+                        onClick={() => togglePagePublish(selectedPage.id, selectedPage.is_published)}
+                        className={`inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md ${
+                          selectedPage.is_published
+                            ? 'bg-green-100 text-green-800 hover:bg-green-200 dark:bg-green-900/30 dark:text-green-300 dark:hover:bg-green-900/50'
+                            : 'bg-gray-100 text-gray-800 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600'
+                        }`}
+                      >
+                        {selectedPage.is_published ? (
+                          <>
+                            <Eye className="h-3 w-3 mr-1" />
+                            Published
+                          </>
+                        ) : (
+                          <>
+                            <EyeOff className="h-3 w-3 mr-1" />
+                            Draft
+                          </>
+                        )}
+                      </button>
+                      
+                      <Link
+                        to={`/pages/${selectedPage.slug}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center px-3 py-1.5 border border-gray-300 text-xs font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 dark:bg-gray-700 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-600"
+                      >
+                        <ExternalLink className="h-3 w-3 mr-1" />
+                        Preview
+                      </Link>
+                      
+                      <button
+                        onClick={() => handleEditPage(selectedPage)}
+                        className="inline-flex items-center px-3 py-1.5 border border-gray-300 text-xs font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 dark:bg-gray-700 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-600"
+                      >
+                        <Pencil className="h-3 w-3 mr-1" />
+                        Edit
+                      </button>
+                    </div>
                   </div>
-                  <div className="flex space-x-3">
-                    <button
-                      onClick={() => previewPage(selectedPage.slug)}
-                      className="inline-flex items-center px-3 py-1.5 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-600"
-                    >
-                      <Eye className="h-4 w-4 mr-1" />
-                      Preview
-                    </button>
-                    <button
-                      onClick={() => togglePageStatus(selectedPage.id, selectedPage.is_published)}
-                      className={`inline-flex items-center px-3 py-1.5 border shadow-sm text-sm font-medium rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 ${
-                        selectedPage.is_published
-                          ? 'border-yellow-300 text-yellow-800 bg-yellow-100 hover:bg-yellow-200 focus:ring-yellow-500 dark:bg-yellow-900/30 dark:text-yellow-300 dark:border-yellow-800 dark:hover:bg-yellow-900/50'
-                          : 'border-green-300 text-green-800 bg-green-100 hover:bg-green-200 focus:ring-green-500 dark:bg-green-900/30 dark:text-green-300 dark:border-green-800 dark:hover:bg-green-900/50'
-                      }`}
-                    >
-                      {selectedPage.is_published ? (
-                        <>
-                          <EyeOff className="h-4 w-4 mr-1" />
-                          Unpublish
-                        </>
-                      ) : (
-                        <>
-                          <Eye className="h-4 w-4 mr-1" />
-                          Publish
-                        </>
-                      )}
-                    </button>
-                  </div>
-                </div>
-                
-                {selectedPage.description && (
-                  <p className="mt-2 text-gray-600 dark:text-gray-300">
-                    {selectedPage.description}
-                  </p>
-                )}
-                
-                <div className="mt-4 flex justify-between items-center">
-                  <div className="text-sm text-gray-500 dark:text-gray-400">
-                    Last updated: {new Date(selectedPage.updated_at).toLocaleString()}
-                  </div>
-                  <button
-                    onClick={() => setIsBlockFormOpen(true)}
-                    className="inline-flex items-center px-3 py-1.5 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                  >
-                    <Plus className="h-4 w-4 mr-1" />
-                    Add Block
-                  </button>
                 </div>
               </div>
-              
+
               {/* Block Form */}
               {isBlockFormOpen && (
                 <div className="bg-white dark:bg-gray-800 shadow sm:rounded-lg">
                   <form onSubmit={handleBlockSubmit} className="p-6">
-                    <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+                    <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-4">
+                      {editingBlock ? 'Edit Block' : 'Add New Block'}
+                    </h3>
+                    
+                    <div className="space-y-4">
                       <div>
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                           Block Title *
@@ -1192,6 +1143,20 @@ const PageBuilder: React.FC = () => {
 
                       <div>
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                          Description
+                        </label>
+                        <textarea
+                          name="description"
+                          value={blockFormData.description}
+                          onChange={handleBlockInputChange}
+                          rows={2}
+                          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white sm:text-sm"
+                          placeholder="Brief description of this block"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                           Block Type *
                         </label>
                         <select
@@ -1201,27 +1166,13 @@ const PageBuilder: React.FC = () => {
                           required
                           className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white sm:text-sm py-2.5"
                         >
-                          <option value="analyzer">Analyzer Card</option>
-                          <option value="contest">Contest Card</option>
+                          <option value="text">Text</option>
+                          <option value="analyzer">Analyzer</option>
+                          <option value="contest">Contest</option>
                           <option value="leaderboard">Leaderboard</option>
-                          <option value="ad">Ad Block</option>
-                          <option value="text">Static Text</option>
+                          <option value="ad">Ad</option>
                           <option value="custom">Custom Component</option>
                         </select>
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                          Description
-                        </label>
-                        <input
-                          type="text"
-                          name="description"
-                          value={blockFormData.description}
-                          onChange={handleBlockInputChange}
-                          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white sm:text-sm py-2.5"
-                          placeholder="Optional description"
-                        />
                       </div>
 
                       <div>
@@ -1234,27 +1185,29 @@ const PageBuilder: React.FC = () => {
                             name="background_color"
                             value={blockFormData.background_color}
                             onChange={handleBlockInputChange}
-                            className="h-8 w-8 rounded border-gray-300 mr-2"
+                            className="h-8 w-8 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
                           />
                           <input
                             type="text"
                             name="background_color"
                             value={blockFormData.background_color}
                             onChange={handleBlockInputChange}
-                            className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white sm:text-sm py-2.5"
+                            className="ml-2 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white sm:text-sm py-2.5"
                             placeholder="#ffffff"
                           />
                         </div>
                       </div>
 
-                      <div className="sm:col-span-2">
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                           Block Content
                         </label>
-                        {getContentFields()}
+                        <div className="mt-1 p-4 border border-gray-200 dark:border-gray-700 rounded-md">
+                          {getContentFields()}
+                        </div>
                       </div>
 
-                      <div className="sm:col-span-2">
+                      <div>
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                           Visibility Rules (JSON)
                         </label>
@@ -1264,10 +1217,10 @@ const PageBuilder: React.FC = () => {
                           onChange={handleBlockInputChange}
                           rows={3}
                           className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white sm:text-sm font-mono"
-                          placeholder='{"requiredModel": "model-id", "minLevel": 5}'
+                          placeholder='{"userType": "premium", "minLevel": 5}'
                         />
                         <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                          Optional JSON rules for conditional visibility
+                          Optional rules to control block visibility
                         </p>
                       </div>
                     </div>
@@ -1292,205 +1245,139 @@ const PageBuilder: React.FC = () => {
                   </form>
                 </div>
               )}
-              
+
               {/* Blocks List */}
               <div className="bg-white dark:bg-gray-800 shadow sm:rounded-lg">
-                <div className="px-4 py-5 sm:px-6 flex justify-between items-center">
-                  <h3 className="text-lg leading-6 font-medium text-gray-900 dark:text-white">
-                    Page Blocks
-                  </h3>
-                  <span className="text-sm text-gray-500 dark:text-gray-400">
-                    {blocks.length} blocks
-                  </span>
-                </div>
-                
-                <ul className="divide-y divide-gray-200 dark:divide-gray-700">
-                  {blocks.map((block, index) => (
-                    <li key={block.id} className="px-4 py-4 sm:px-6 hover:bg-gray-50 dark:hover:bg-gray-700">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center">
-                          <div className="flex-shrink-0 h-10 w-10 rounded-md bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center">
-                            {getBlockTypeIcon(block.block_type)}
-                          </div>
-                          <div className="ml-4">
-                            <h4 className="text-sm font-medium text-gray-900 dark:text-white">
-                              {block.title}
-                            </h4>
-                            <p className="text-xs text-gray-500 dark:text-gray-400">
-                              {getBlockTypeLabel(block.block_type)}
-                              {block.description && ` • ${block.description}`}
-                            </p>
-                          </div>
-                        </div>
-                        <div className="flex space-x-2">
-                          <button
-                            onClick={() => moveBlock(block.id, 'up')}
-                            disabled={index === 0}
-                            className={`p-1 rounded ${
-                              index === 0
-                                ? 'text-gray-300 dark:text-gray-600 cursor-not-allowed'
-                                : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'
-                            }`}
-                            title="Move Up"
-                          >
-                            <ArrowUp className="h-4 w-4" />
-                          </button>
-                          <button
-                            onClick={() => moveBlock(block.id, 'down')}
-                            disabled={index === blocks.length - 1}
-                            className={`p-1 rounded ${
-                              index === blocks.length - 1
-                                ? 'text-gray-300 dark:text-gray-600 cursor-not-allowed'
-                                : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'
-                            }`}
-                            title="Move Down"
-                          >
-                            <ArrowDown className="h-4 w-4" />
-                          </button>
-                          <button
-                            onClick={() => duplicateBlock(block)}
-                            className="p-1 rounded text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
-                            title="Duplicate"
-                          >
-                            <Copy className="h-4 w-4" />
-                          </button>
-                          <button
-                            onClick={() => handleEditBlock(block)}
-                            className="p-1 rounded text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300"
-                            title="Edit"
-                          >
-                            <Pencil className="h-4 w-4" />
-                          </button>
-                          <button
-                            onClick={() => handleDeleteBlock(block.id)}
-                            className="p-1 rounded text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300"
-                            title="Delete"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        </div>
-                      </div>
-                      
-                      {/* Block Preview */}
-                      <div 
-                        className="mt-3 p-3 rounded-md text-sm"
-                        style={{ backgroundColor: block.background_color || '#f9fafb' }}
-                      >
-                        {block.block_type === 'text' && (
-                          <div className="prose dark:prose-invert max-w-none">
-                            <p>{block.content?.text || 'Text content will appear here'}</p>
-                          </div>
-                        )}
-                        
-                        {block.block_type === 'analyzer' && (
-                          <div className="flex items-center text-gray-600 dark:text-gray-300">
-                            <BarChart2 className="h-4 w-4 mr-2" />
-                            <span>
-                              {block.content?.analyzer_id 
-                                ? `Linked to analyzer: ${block.content.analyzer_id}`
-                                : 'No analyzer selected'}
-                              {block.content?.showUploadButton && ' • Upload button enabled'}
-                            </span>
-                          </div>
-                        )}
-                        
-                        {block.block_type === 'contest' && (
-                          <div className="flex items-center text-gray-600 dark:text-gray-300">
-                            <Trophy className="h-4 w-4 mr-2" />
-                            <span>
-                              {block.content?.contest_id 
-                                ? `Linked to contest: ${block.content.contest_id}`
-                                : 'No contest selected'}
-                              {block.content?.showPrizePool && ' • Prize pool visible'}
-                            </span>
-                          </div>
-                        )}
-                        
-                        {block.block_type === 'leaderboard' && (
-                          <div className="flex items-center text-gray-600 dark:text-gray-300">
-                            <Target className="h-4 w-4 mr-2" />
-                            <span>
-                              {block.content?.sport 
-                                ? `Sport filter: ${block.content.sport}`
-                                : 'All sports'}
-                              {block.content?.limit && ` • Limit: ${block.content.limit} entries`}
-                            </span>
-                          </div>
-                        )}
-                        
-                        {block.block_type === 'ad' && (
-                          <div className="flex items-center text-gray-600 dark:text-gray-300">
-                            <MonitorPlay className="h-4 w-4 mr-2" />
-                            <span>
-                              {block.content?.ad_id 
-                                ? `Linked to ad: ${block.content.ad_id}`
-                                : 'No ad selected'}
-                              {block.content?.placement && ` • Placement: ${block.content.placement}`}
-                            </span>
-                          </div>
-                        )}
-                        
-                        {block.block_type === 'custom' && (
-                          <div className="flex items-center text-gray-600 dark:text-gray-300">
-                            <Layers className="h-4 w-4 mr-2" />
-                            <span>
-                              {block.content?.component 
-                                ? `Component: ${block.content.component}`
-                                : 'No component specified'}
-                            </span>
-                          </div>
-                        )}
-                      </div>
-                      
-                      {/* Visibility Rules */}
-                      {Object.keys(block.visibility_rules || {}).length > 0 && (
-                        <div className="mt-2 flex items-center text-xs text-gray-500 dark:text-gray-400">
-                          <Settings className="h-3 w-3 mr-1" />
-                          <span>Has visibility rules</span>
-                        </div>
-                      )}
-                    </li>
-                  ))}
+                <div className="px-4 py-5 sm:p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-lg leading-6 font-medium text-gray-900 dark:text-white">
+                      Page Blocks
+                    </h3>
+                    <button
+                      onClick={() => setIsBlockFormOpen(true)}
+                      className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                    >
+                      <Plus className="h-3 w-3 mr-1" />
+                      Add Block
+                    </button>
+                  </div>
                   
-                  {blocks.length === 0 && (
-                    <li className="px-4 py-12 text-center">
+                  {blocks.length > 0 ? (
+                    <div className="space-y-4">
+                      {blocks.map((block, index) => (
+                        <div 
+                          key={block.id}
+                          className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 hover:shadow-md transition-shadow"
+                        >
+                          <div className="flex items-start justify-between">
+                            <div className="flex items-start">
+                              <div className="mr-3">
+                                {getBlockTypeIcon(block.block_type)}
+                              </div>
+                              <div>
+                                <h4 className="text-sm font-medium text-gray-900 dark:text-white">
+                                  {block.title}
+                                </h4>
+                                {block.description && (
+                                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                    {block.description}
+                                  </p>
+                                )}
+                                <div className="flex items-center mt-1">
+                                  <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300">
+                                    {block.block_type}
+                                  </span>
+                                  {block.background_color && (
+                                    <div className="ml-2 flex items-center">
+                                      <div 
+                                        className="w-3 h-3 rounded-full border border-gray-300 dark:border-gray-600 mr-1"
+                                        style={{ backgroundColor: block.background_color }}
+                                      />
+                                      <span className="text-xs text-gray-500 dark:text-gray-400">
+                                        {block.background_color}
+                                      </span>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                            <div className="flex items-center space-x-2">
+                              <button
+                                onClick={() => moveBlock(block.id, 'up')}
+                                disabled={index === 0}
+                                className={`p-1 rounded ${
+                                  index === 0
+                                    ? 'text-gray-300 dark:text-gray-600 cursor-not-allowed'
+                                    : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'
+                                }`}
+                                title="Move Up"
+                              >
+                                <ArrowUp className="h-4 w-4" />
+                              </button>
+                              <button
+                                onClick={() => moveBlock(block.id, 'down')}
+                                disabled={index === blocks.length - 1}
+                                className={`p-1 rounded ${
+                                  index === blocks.length - 1
+                                    ? 'text-gray-300 dark:text-gray-600 cursor-not-allowed'
+                                    : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'
+                                }`}
+                                title="Move Down"
+                              >
+                                <ArrowDown className="h-4 w-4" />
+                              </button>
+                              <button
+                                onClick={() => duplicateBlock(block)}
+                                className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
+                                title="Duplicate"
+                              >
+                                <Copy className="h-4 w-4" />
+                              </button>
+                              <button
+                                onClick={() => handleEditBlock(block)}
+                                className="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300"
+                                title="Edit"
+                              >
+                                <Pencil className="h-4 w-4" />
+                              </button>
+                              <button
+                                onClick={() => handleDeleteBlock(block.id)}
+                                className="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300"
+                                title="Delete"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-6">
                       <Layers className="mx-auto h-12 w-12 text-gray-400" />
                       <h3 className="mt-2 text-sm font-medium text-gray-900 dark:text-white">No blocks</h3>
                       <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                        Get started by adding a block to this page.
+                        Get started by adding your first block to this page.
                       </p>
-                      <div className="mt-6">
-                        <button
-                          type="button"
-                          onClick={() => setIsBlockFormOpen(true)}
-                          className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                        >
-                          <Plus className="-ml-1 mr-2 h-5 w-5" />
-                          Add Block
-                        </button>
-                      </div>
-                    </li>
+                    </div>
                   )}
-                </ul>
+                </div>
               </div>
             </div>
           ) : (
             <div className="bg-white dark:bg-gray-800 shadow sm:rounded-lg p-12 text-center">
-              <Layout className="mx-auto h-12 w-12 text-gray-400" />
-              <h3 className="mt-2 text-sm font-medium text-gray-900 dark:text-white">No page selected</h3>
-              <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+              <Layout className="mx-auto h-16 w-16 text-gray-400 mb-4" />
+              <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">No Page Selected</h3>
+              <p className="text-gray-500 dark:text-gray-400 mb-6">
                 Select a page from the list or create a new one to start building.
               </p>
-              <div className="mt-6">
-                <button
-                  type="button"
-                  onClick={() => setIsPageFormOpen(true)}
-                  className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                >
-                  <Plus className="-ml-1 mr-2 h-5 w-5" />
-                  Create New Page
-                </button>
-              </div>
+              <button
+                onClick={() => setIsPageFormOpen(true)}
+                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Create New Page
+              </button>
             </div>
           )}
         </div>
