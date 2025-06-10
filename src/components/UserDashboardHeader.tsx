@@ -4,6 +4,12 @@ import { User, Bell, LogOut, Menu, X, Coins, Award, Settings } from 'lucide-reac
 import { supabase } from '../lib/supabase';
 import AnimatedTokenCounter from './AnimatedTokenCounter';
 
+interface NavItem {
+  name: string;
+  slug: string;
+  icon?: string;
+}
+
 const UserDashboardHeader: React.FC = () => {
   const [user, setUser] = useState<any>(null);
   const [userTokens, setUserTokens] = useState<number>(0);
@@ -11,10 +17,12 @@ const UserDashboardHeader: React.FC = () => {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [notifications, setNotifications] = useState<any[]>([]);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+  const [navItems, setNavItems] = useState<NavItem[]>([]);
 
   useEffect(() => {
     fetchUserData();
     fetchNotifications();
+    fetchNavItems();
   }, []);
 
   const fetchUserData = async () => {
@@ -58,6 +66,46 @@ const UserDashboardHeader: React.FC = () => {
     }
   };
 
+  const fetchNavItems = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('page_layouts')
+        .select('name, slug, metadata')
+        .eq('is_published', true)
+        .order('created_at');
+
+      if (error) throw error;
+      
+      const items: NavItem[] = [];
+      
+      // Add default items
+      items.push({ name: 'Dashboard', slug: 'dashboard' });
+      
+      // Add custom pages that should show in nav
+      data?.forEach(page => {
+        try {
+          const metadata = typeof page.metadata === 'string' 
+            ? JSON.parse(page.metadata) 
+            : page.metadata;
+            
+          if (metadata?.showInNav) {
+            items.push({
+              name: page.name,
+              slug: page.slug,
+              icon: metadata.icon
+            });
+          }
+        } catch (e) {
+          console.error('Error parsing page metadata:', e);
+        }
+      });
+      
+      setNavItems(items);
+    } catch (error) {
+      console.error('Error fetching nav items:', error);
+    }
+  };
+
   const handleSignOut = async () => {
     try {
       await supabase.auth.signOut();
@@ -94,23 +142,24 @@ const UserDashboardHeader: React.FC = () => {
             
             {/* Desktop Navigation */}
             <nav className="hidden md:ml-8 md:flex md:space-x-8">
-              <Link
-                to="/dashboard"
-                className="text-gray-700 dark:text-gray-300 hover:text-indigo-600 dark:hover:text-indigo-400 px-3 py-2 text-sm font-medium"
-              >
-                Dashboard
-              </Link>
-              <Link
-                to="/analyzer-results"
-                className="text-gray-700 dark:text-gray-300 hover:text-indigo-600 dark:hover:text-indigo-400 px-3 py-2 text-sm font-medium"
-              >
+              {navItems.map((item) => (
+                <Link
+                  key={item.slug}
+                  to={item.slug === 'dashboard' ? '/dashboard' : `/pages/${item.slug}`}
+                  className="text-gray-700 dark:text-gray-300 hover:text-indigo-600 dark:hover:text-indigo-400 px-3 py-2 text-sm font-medium"
+                >
+                  {item.name}
+                </Link>
+              ))}
+              <Link 
+                to="/analyzer-results" 
+                className="text-gray-700 dark:text-gray-300 hover:text-indigo-600 dark:hover:text-indigo-400 px-3 py-2 text-sm font-medium">
                 My Analyses
               </Link>
-              <Link
-                to="/profile"
-                className="text-gray-700 dark:text-gray-300 hover:text-indigo-600 dark:hover:text-indigo-400 px-3 py-2 text-sm font-medium"
-              >
-                Achievements
+              <Link 
+                to="/profile" 
+                className="text-gray-700 dark:text-gray-300 hover:text-indigo-600 dark:hover:text-indigo-400 px-3 py-2 text-sm font-medium">
+                Profile
               </Link>
             </nav>
           </div>
@@ -246,13 +295,16 @@ const UserDashboardHeader: React.FC = () => {
       {isMenuOpen && (
         <div className="md:hidden">
           <div className="px-2 pt-2 pb-3 space-y-1 sm:px-3">
-            <Link
-              to="/dashboard"
-              className="block px-3 py-2 rounded-md text-base font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
-              onClick={() => setIsMenuOpen(false)}
-            >
-              Dashboard
-            </Link>
+            {navItems.map((item) => (
+              <Link
+                key={item.slug}
+                to={item.slug === 'dashboard' ? '/dashboard' : `/pages/${item.slug}`}
+                className="block px-3 py-2 rounded-md text-base font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+                onClick={() => setIsMenuOpen(false)}
+              >
+                {item.name}
+              </Link>
+            ))}
             <Link
               to="/analyzer-results"
               className="block px-3 py-2 rounded-md text-base font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
@@ -265,7 +317,7 @@ const UserDashboardHeader: React.FC = () => {
               className="block px-3 py-2 rounded-md text-base font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
               onClick={() => setIsMenuOpen(false)}
             >
-              Achievements
+              Profile
             </Link>
           </div>
           
