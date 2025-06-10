@@ -790,6 +790,9 @@ const PageBuilder: React.FC = () => {
                       <div className="sm:col-span-2">
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                           Visibility Rules (JSON)
+                          <span className="ml-1 text-xs text-gray-500 dark:text-gray-400">
+                            (e.g., {"minTokens": 50, "hasUsedAnalyzer": "model-id", "joinedContest": "contest-id"})
+                          </span>
                         </label>
                         <textarea
                           name="visibility_rules"
@@ -798,8 +801,12 @@ const PageBuilder: React.FC = () => {
                           rows={3}
                           className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white sm:text-sm font-mono"
                           placeholder={`{
-  "loggedIn": true,
-  "minTokens": 10
+  "requiresAuth": true,
+  "minTokens": 50,
+  "hasUsedAnalyzer": "model-id-here",
+  "joinedContest": "contest-id-here",
+  "hasJoinedAnyContest": true,
+  "hasUsedAnyAnalyzer": true
 }`}
                         />
                       </div>
@@ -913,7 +920,10 @@ const PageBuilder: React.FC = () => {
                             </span>
                           )}
                           {Object.keys(block.visibility_rules || {}).length > 0 && (
-                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300">
+                            <span 
+                              className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300"
+                              title={JSON.stringify(block.visibility_rules)}
+                            >
                               <Settings className="h-3 w-3 mr-1" />
                               Has Visibility Rules
                             </span>

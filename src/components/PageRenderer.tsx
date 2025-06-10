@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { Loader2, Sparkles } from 'lucide-react';
+import { useEffect, useState } from 'react';
 import AffiliateAdCard from './AffiliateAdCard';
 import AnalyzerDemo from './AnalyzerDemo';
 import UserAchievements from './UserAchievements';
@@ -32,6 +33,13 @@ interface UIBlock {
   layout_mode: string | null;
 }
 
+interface UserVisibilityData {
+  tokenBalance: number;
+  usedAnalyzers: string[];
+  joinedContests: string[];
+  isAuthenticated: boolean;
+}
+
 const PageRenderer: React.FC = () => {
   const { slug } = useParams<{ slug: string }>();
   const [page, setPage] = useState<PageLayout | null>(null);
@@ -40,12 +48,19 @@ const PageRenderer: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [showConfetti, setShowConfetti] = useState(false);
   const [analyticsTracked, setAnalyticsTracked] = useState(false);
+  const [userVisibilityData, setUserVisibilityData] = useState<UserVisibilityData>({
+    tokenBalance: 0,
+    usedAnalyzers: [],
+    joinedContests: [],
+    isAuthenticated: false
+  });
   
   const { ads, trackClick } = useAds();
 
   useEffect(() => {
     if (slug) {
       fetchPage(slug);
+      fetchUserVisibilityData();
     }
   }, [slug]);
 
@@ -62,6 +77,53 @@ const PageRenderer: React.FC = () => {
       trackPageView();
     }
   }, [page, blocks]);
+
+  const fetchUserVisibilityData = async () => {
+    try {
+      // Check if user is authenticated
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (!user) {
+        setUserVisibilityData({
+          tokenBalance: 0,
+          usedAnalyzers: [],
+          joinedContests: [],
+          isAuthenticated: false
+        });
+        return;
+      }
+      
+      // Fetch user token balance
+      const { data: tokenData } = await supabase
+        .from('user_tokens')
+        .select('balance')
+        .eq('user_id', user.id)
+        .single();
+      
+      // Fetch analyzers the user has used
+      const { data: analyzerData } = await supabase
+        .from('analyzer_requests')
+        .select('model_id')
+        .eq('user_id', user.id)
+        .eq('status', 'completed');
+      
+      // Fetch contests the user has joined
+      const { data: contestData } = await supabase
+        .from('contest_entries')
+        .select('contest_id')
+        .eq('user_id', user.id);
+      
+      setUserVisibilityData({
+        tokenBalance: tokenData?.balance || 0,
+        usedAnalyzers: analyzerData?.map(item => item.model_id) || [],
+        joinedContests: contestData?.map(item => item.contest_id) || [],
+        isAuthenticated: true
+      });
+      
+    } catch (error) {
+      console.error('Error fetching user visibility data:', error);
+    }
+  };
 
   const fetchPage = async (pageSlug: string) => {
     try {
@@ -102,6 +164,47 @@ const PageRenderer: React.FC = () => {
     }
   };
 
+  const checkVisibility = (block: UIBlock): boolean => {
+    // If no visibility rules, always show the block
+    if (!block.visibility_rules || Object.keys(block.visibility_rules).length === 0) {
+      return true;
+    }
+    
+    const rules = block.visibility_rules as Record<string, any>;
+    
+    // Check authentication requirement
+    if (rules.requiresAuth === true && !userVisibilityData.isAuthenticated) {
+      return false;
+    }
+    
+    // Check minimum token balance
+    if (rules.minTokens !== undefined && userVisibilityData.tokenBalance < rules.minTokens) {
+      return false;
+    }
+    
+    // Check if user has used a specific analyzer
+    if (rules.hasUsedAnalyzer && !userVisibilityData.usedAnalyzers.includes(rules.hasUsedAnalyzer)) {
+      return false;
+    }
+    
+    // Check if user has joined a specific contest
+    if (rules.joinedContest && !userVisibilityData.joinedContests.includes(rules.joinedContest)) {
+      return false;
+    }
+    
+    // Check if user has joined any contest
+    if (rules.hasJoinedAnyContest === true && userVisibilityData.joinedContests.length === 0) {
+      return false;
+    }
+    
+    // Check if user has used any analyzer
+    if (rules.hasUsedAnyAnalyzer === true && userVisibilityData.usedAnalyzers.length === 0) {
+      return false;
+    }
+    
+    return true;
+  };
+
   const trackPageView = async () => {
     try {
       // In a real implementation, this would track the page view in the database
@@ -126,10 +229,9 @@ const PageRenderer: React.FC = () => {
   };
 
   const renderBlock = (block: UIBlock) => {
-    // Check visibility rules
-    if (block.visibility_rules && Object.keys(block.visibility_rules).length > 0) {
-      // In a real implementation, we would check these rules against the user's state
-      // For now, we'll just render all blocks
+    // Check if block should be visible based on visibility rules
+    if (!checkVisibility(block)) {
+      return null;
     }
 
     const blockStyle = {
@@ -312,62 +414,66 @@ const PageRenderer: React.FC = () => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <div className="space-y-8">
         {blocks.map((block) => block.layout_mode === 'standard' ? (
-          <div key={block.id} className="bg-white dark:bg-gray-800 shadow-sm rounded-lg overflow-hidden">
-            {renderBlock(block)}
-          </div>
-        ) : (
-          <div key={block.id} className="bg-white dark:bg-gray-800 shadow-sm rounded-lg overflow-hidden p-6">
-            <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-4 flex items-center">{block.title} {block.animation === 'confetti' && <Sparkles className="ml-2 h-5 w-5 text-yellow-500" />}</h3>
-            {block.description && (
-              <p className="text-gray-600 dark:text-gray-300 mb-4">{block.description}</p>
-            )}
-            <div className={renderBlock(block).props.className.replace('p-6 rounded-lg', '')}>
-              {/* Render content based on layout mode */}
-              {block.layout_mode === 'carousel' && (
-                <div className="flex space-x-4 overflow-x-auto pb-4">
-                  {Array.from({ length: 5 }).map((_, i) => (
-                    <div key={i} className="flex-shrink-0 w-64 bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
-                      <h4 className="font-medium text-gray-900 dark:text-white">Item {i + 1}</h4>
-                      <p className="text-sm text-gray-500 dark:text-gray-400">Sample carousel item</p>
-                    </div>
-                  ))}
-                </div>
-              )}
-              
-              {block.layout_mode === 'horizontal-scroll' && (
-                <div className="flex space-x-4 overflow-x-auto pb-4">
-                  {Array.from({ length: 5 }).map((_, i) => (
-                    <div key={i} className="flex-shrink-0 w-64 bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
-                      <h4 className="font-medium text-gray-900 dark:text-white">Item {i + 1}</h4>
-                      <p className="text-sm text-gray-500 dark:text-gray-400">Sample scroll item</p>
-                    </div>
-                  ))}
-                </div>
-              )}
-              
-              {block.layout_mode === 'grid' && (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {Array.from({ length: 6 }).map((_, i) => (
-                    <div key={i} className="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
-                      <h4 className="font-medium text-gray-900 dark:text-white">Item {i + 1}</h4>
-                      <p className="text-sm text-gray-500 dark:text-gray-400">Sample grid item</p>
-                    </div>
-                  ))}
-                </div>
-              )}
-              
-              {block.layout_mode === 'stacked' && (
-                <div className="space-y-4">
-                  {Array.from({ length: 3 }).map((_, i) => (
-                    <div key={i} className="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
-                      <h4 className="font-medium text-gray-900 dark:text-white">Card {i + 1}</h4>
-                      <p className="text-sm text-gray-500 dark:text-gray-400">Sample stacked card</p>
-                    </div>
-                  ))}
-                </div>
-              )}
+          renderBlock(block) && (
+            <div key={block.id} className="bg-white dark:bg-gray-800 shadow-sm rounded-lg overflow-hidden">
+              {renderBlock(block)}
             </div>
-          </div>
+          )
+        ) : (
+          checkVisibility(block) && (
+            <div key={block.id} className="bg-white dark:bg-gray-800 shadow-sm rounded-lg overflow-hidden p-6">
+              <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-4 flex items-center">{block.title} {block.animation === 'confetti' && <Sparkles className="ml-2 h-5 w-5 text-yellow-500" />}</h3>
+              {block.description && (
+                <p className="text-gray-600 dark:text-gray-300 mb-4">{block.description}</p>
+              )}
+              <div className={renderBlock(block)?.props?.className?.replace('p-6 rounded-lg', '') || ''}>
+                {/* Render content based on layout mode */}
+                {block.layout_mode === 'carousel' && (
+                  <div className="flex space-x-4 overflow-x-auto pb-4">
+                    {Array.from({ length: 5 }).map((_, i) => (
+                      <div key={i} className="flex-shrink-0 w-64 bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
+                        <h4 className="font-medium text-gray-900 dark:text-white">Item {i + 1}</h4>
+                        <p className="text-sm text-gray-500 dark:text-gray-400">Sample carousel item</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                
+                {block.layout_mode === 'horizontal-scroll' && (
+                  <div className="flex space-x-4 overflow-x-auto pb-4">
+                    {Array.from({ length: 5 }).map((_, i) => (
+                      <div key={i} className="flex-shrink-0 w-64 bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
+                        <h4 className="font-medium text-gray-900 dark:text-white">Item {i + 1}</h4>
+                        <p className="text-sm text-gray-500 dark:text-gray-400">Sample scroll item</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                
+                {block.layout_mode === 'grid' && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {Array.from({ length: 6 }).map((_, i) => (
+                      <div key={i} className="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
+                        <h4 className="font-medium text-gray-900 dark:text-white">Item {i + 1}</h4>
+                        <p className="text-sm text-gray-500 dark:text-gray-400">Sample grid item</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                
+                {block.layout_mode === 'stacked' && (
+                  <div className="space-y-4">
+                    {Array.from({ length: 3 }).map((_, i) => (
+                      <div key={i} className="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
+                        <h4 className="font-medium text-gray-900 dark:text-white">Card {i + 1}</h4>
+                        <p className="text-sm text-gray-500 dark:text-gray-400">Sample stacked card</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )
         ))}
         
         {blocks.length === 0 && (
@@ -380,6 +486,19 @@ const PageRenderer: React.FC = () => {
         )}
       </div>
       </div>
+
+      {/* Debugging UI - Only visible in development */}
+      {import.meta.env.DEV && (
+        <div className="fixed bottom-4 right-4 bg-white dark:bg-gray-800 p-4 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 max-w-xs">
+          <h4 className="text-sm font-semibold mb-2">Visibility Data (Debug)</h4>
+          <div className="text-xs space-y-1">
+            <p><span className="font-medium">Auth:</span> {userVisibilityData.isAuthenticated ? 'Yes' : 'No'}</p>
+            <p><span className="font-medium">Tokens:</span> {userVisibilityData.tokenBalance}</p>
+            <p><span className="font-medium">Used Analyzers:</span> {userVisibilityData.usedAnalyzers.length}</p>
+            <p><span className="font-medium">Joined Contests:</span> {userVisibilityData.joinedContests.length}</p>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

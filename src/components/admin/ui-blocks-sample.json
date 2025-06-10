@@ -1,0 +1,94 @@
+[
+  {
+    "title": "Welcome Banner",
+    "description": "Welcome message for users",
+    "block_type": "text",
+    "content": {
+      "text": "Welcome to Sports Genius! Get AI-powered insights for your sports bets.",
+      "textSize": "large"
+    },
+    "position": 0,
+    "background_color": "#f0f9ff",
+    "visibility_rules": {}
+  },
+  {
+    "title": "Quick Analyzer",
+    "description": "Quick access to analyzer",
+    "block_type": "analyzer",
+    "content": {
+      "analyzer_id": null,
+      "showUploadButton": true
+    },
+    "position": 1,
+    "background_color": "#ffffff",
+    "visibility_rules": {}
+  },
+  {
+    "title": "Premium Analyzer",
+    "description": "Advanced analyzer for premium users",
+    "block_type": "analyzer",
+    "content": {
+      "analyzer_id": "premium-analyzer-id",
+      "showUploadButton": true
+    },
+    "position": 2,
+    "background_color": "#f8f9fa",
+    "visibility_rules": {
+      "minTokens": 100,
+      "requiresAuth": true
+    }
+  },
+  {
+    "title": "Featured Contest",
+    "description": "Highlighted contest of the day",
+    "block_type": "contest",
+    "content": {
+      "contest_id": "featured-contest-id",
+      "showPrizePool": true
+    },
+    "position": 3,
+    "background_color": "#f8fafc",
+    "visibility_rules": {
+      "requiresAuth": true
+    }
+  },
+  {
+    "title": "Advanced Insights",
+    "description": "Advanced betting insights for experienced users",
+    "block_type": "custom",
+    "content": {
+      "component": "AdvancedInsights"
+    },
+    "position": 4,
+    "background_color": "#f0f4f8",
+    "visibility_rules": {
+      "hasUsedAnyAnalyzer": true,
+      "minTokens": 50
+    }
+  },
+  {
+    "title": "Contest Leaderboard",
+    "description": "See how you rank against other users",
+    "block_type": "leaderboard",
+    "content": {
+      "contest_id": "specific-contest-id",
+      "limit": 10
+    },
+    "position": 5,
+    "background_color": "#f0f0f0",
+    "visibility_rules": {
+      "joinedContest": "specific-contest-id"
+    }
+  },
+  {
+    "title": "Recommended Sportsbook",
+    "description": "Targeted sportsbook ad",
+    "block_type": "ad",
+    "content": {
+      "placement": "inline"
+    },
+    "position": 6,
+    "background_color": "#f0f9ff",
+    "visibility_rules": {}
+  }
+]
