@@ -53,7 +53,8 @@ export async function fetchUserVisibilityData() {
         tokenBalance: 0,
         usedAnalyzers: [],
         joinedContests: [],
-        isAuthenticated: false
+        isAuthenticated: false,
+        role: null
       };
     }
     
@@ -77,11 +78,22 @@ export async function fetchUserVisibilityData() {
       .select('contest_id')
       .eq('user_id', user.id);
     
+    // Get user role
+    const { data: roleData } = await supabase
+      .from('admin_role_assignments')
+      .select('role_name')
+      .eq('user_id', user.id)
+      .eq('is_active', true)
+      .single();
+    
+    const role = roleData?.role_name || 'user';
+    
     return {
       tokenBalance: tokenData?.balance || 0,
       usedAnalyzers: analyzerData?.map(item => item.model_id) || [],
       joinedContests: contestData?.map(item => item.contest_id) || [],
-      isAuthenticated: true
+      isAuthenticated: true,
+      role
     };
   } catch (error) {
     console.error('Error fetching user visibility data:', error);
@@ -89,7 +101,8 @@ export async function fetchUserVisibilityData() {
       tokenBalance: 0,
       usedAnalyzers: [],
       joinedContests: [],
-      isAuthenticated: false
+      isAuthenticated: false,
+      role: null
     };
   }
 }

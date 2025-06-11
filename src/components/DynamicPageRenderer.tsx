@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { Loader2, Sparkles } from 'lucide-react';
 import { fetchPageWithBlocks, fetchUserVisibilityData, trackPageView, trackBlockInteraction } from '../lib/api';
-import { TokenGate } from './TokenGate';
+import { isBlockVisible, isMobile } from '../utils/visibility';
 import AffiliateAdCard from './AffiliateAdCard';
 import AnalyzerDemo from './AnalyzerDemo';
 import UserAchievements from './UserAchievements';
@@ -41,6 +41,7 @@ const DynamicPageRenderer: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [showConfetti, setShowConfetti] = useState(false);
   const [analyticsTracked, setAnalyticsTracked] = useState(false);
+  const [userData, setUserData] = useState<any>(null);
   
   const { ads, trackClick } = useAds();
 
@@ -54,6 +55,15 @@ const DynamicPageRenderer: React.FC = () => {
           return;
         }
         setPage(pageData);
+        
+        // Fetch user data for visibility rules
+        const userVisibilityData = await fetchUserVisibilityData();
+        setUserData({
+          ...userVisibilityData,
+          role: userVisibilityData.isAuthenticated ? 'user' : null,
+          tokens: userVisibilityData.tokenBalance
+        });
+        
         setError(null);
       } catch (err) {
         console.error('Error loading page:', err);
@@ -85,6 +95,15 @@ const DynamicPageRenderer: React.FC = () => {
 
   const handleBlockInteraction = (blockId: string, interactionType: string) => {
     trackBlockInteraction(blockId, interactionType);
+  };
+
+  // Filter blocks based on visibility rules and device type
+  const getVisibleBlocks = () => {
+    if (!page?.blocks) return [];
+    
+    return page.blocks
+      .filter(block => isBlockVisible(block, userData))
+      .sort((a, b) => a.position - b.position);
   };
 
   const renderBlock = (block: UIBlock) => {
@@ -266,6 +285,103 @@ const DynamicPageRenderer: React.FC = () => {
       <UserDashboardHeader />
       <ConfettiAnimation isActive={showConfetti} />
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Mobile-specific layout adjustments */}
+        <div className={`space-y-8 ${isMobile() ? 'mobile-layout' : ''}`}>
+          {getVisibleBlocks().map((block) => (
+            <React.Fragment key={block.id}>
+              {block.layout_mode === 'standard' ? (
+                <div className="bg-white dark:bg-gray-800 shadow-sm rounded-lg overflow-hidden">
+                  {renderBlock(block)}
+                </div>
+              ) : (
+                <div className="bg-white dark:bg-gray-800 shadow-sm rounded-lg overflow-hidden p-6">
+                  <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-4 flex items-center">
+                    {block.title} {block.animation === 'confetti' && <Sparkles className="ml-2 h-5 w-5 text-yellow-500" />}
+                  </h3>
+                  {block.description && (
+                    <p className="text-gray-600 dark:text-gray-300 mb-4">{block.description}</p>
+                  )}
+                  <div className={block.layout_mode || ''}>
+                    {/* Render content based on layout mode */}
+                    {block.layout_mode === 'carousel' && (
+                      <div className="flex space-x-4 overflow-x-auto pb-4">
+                        {Array.from({ length: 5 }).map((_, i) => (
+                          <div key={i} className="flex-shrink-0 w-64 bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
+                            <h4 className="font-medium text-gray-900 dark:text-white">Item {i + 1}</h4>
+                            <p className="text-sm text-gray-500 dark:text-gray-400">Sample carousel item</p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    
+                    {block.layout_mode === 'horizontal-scroll' && (
+                      <div className="flex space-x-4 overflow-x-auto pb-4">
+                        {Array.from({ length: 5 }).map((_, i) => (
+                          <div key={i} className="flex-shrink-0 w-64 bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
+                            <h4 className="font-medium text-gray-900 dark:text-white">Item {i + 1}</h4>
+                            <p className="text-sm text-gray-500 dark:text-gray-400">Sample scroll item</p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    
+                    {block.layout_mode === 'grid' && (
+                      <div className={`grid gap-4 ${isMobile() ? 'grid-cols-1' : 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3'}`}>
+                        {Array.from({ length: 6 }).map((_, i) => (
+                          <div key={i} className="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
+                            <h4 className="font-medium text-gray-900 dark:text-white">Item {i + 1}</h4>
+                            <p className="text-sm text-gray-500 dark:text-gray-400">Sample grid item</p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    
+                    {block.layout_mode === 'stacked' && (
+                      <div className="space-y-4">
+                        {Array.from({ length: 3 }).map((_, i) => (
+                          <div key={i} className="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
+                            <h4 className="font-medium text-gray-900 dark:text-white">Card {i + 1}</h4>
+                            <p className="text-sm text-gray-500 dark:text-gray-400">Sample stacked card</p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </React.Fragment>
+          ))}
+          
+          {page.blocks.length === 0 && (
+            <div className="bg-white dark:bg-gray-800 shadow-sm rounded-lg p-12 text-center">
+              <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">No Content Yet</h3>
+              <p className="text-gray-600 dark:text-gray-300">
+                This page has no content blocks. Please check back later.
+              </p>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Debugging UI - Only visible in development */}
+      {import.meta.env.DEV && (
+        <div className="fixed bottom-4 right-4 bg-white dark:bg-gray-800 p-4 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 max-w-xs">
+          <h4 className="text-sm font-semibold mb-2">Visibility Data (Debug)</h4>
+          <div className="text-xs space-y-1">
+            <p><span className="font-medium">Auth:</span> {userData?.isAuthenticated ? 'Yes' : 'No'}</p>
+            <p><span className="font-medium">Role:</span> {userData?.role || 'none'}</p>
+            <p><span className="font-medium">Tokens:</span> {userData?.tokens || 0}</p>
+            <p><span className="font-medium">Device:</span> {isMobile() ? 'Mobile' : 'Desktop'}</p>
+            <p><span className="font-medium">Used Analyzers:</span> {userData?.usedAnalyzers?.length || 0}</p>
+            <p><span className="font-medium">Joined Contests:</span> {userData?.joinedContests?.length || 0}</p>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default DynamicPageRenderer;
         <div className="space-y-8">
           {page.blocks.sort((a, b) => a.position - b.position).map((block) => (
             <TokenGate key={block.id} rule={block.visibility_rules}>

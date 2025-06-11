@@ -791,8 +791,11 @@ const PageBuilder: React.FC = () => {
                           onChange={handleBlockInputChange}
                           rows={3}
                           className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white sm:text-sm font-mono"
-                          placeholder='{"requireAuth": false, "roles": ["user"]}'
+                          placeholder='{"requiresAuth": false, "roles": ["user"], "device": "mobile", "minTokens": 100}'
                         />
+                        <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                          Supported rules: requiresAuth, roles, device, minTokens, hasUsedAnalyzer, joinedContest, hasJoinedAnyContest, hasUsedAnyAnalyzer
+                        </p>
                       </div>
                     </div>
 
@@ -885,6 +888,30 @@ const PageBuilder: React.FC = () => {
                           <p className="mt-2 text-xs text-gray-600 dark:text-gray-300">
                             {block.description}
                           </p>
+                        )}
+                        {Object.keys(block.visibility_rules || {}).length > 0 && (
+                          <div className="mt-2 flex flex-wrap gap-1">
+                            {block.visibility_rules.requiresAuth && (
+                              <span className="px-2 py-0.5 text-xs bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-300 rounded-full">
+                                Auth Required
+                              </span>
+                            )}
+                            {block.visibility_rules.roles && (
+                              <span className="px-2 py-0.5 text-xs bg-purple-100 text-purple-800 dark:bg-purple-900/20 dark:text-purple-300 rounded-full">
+                                Roles: {block.visibility_rules.roles.join(', ')}
+                              </span>
+                            )}
+                            {block.visibility_rules.device && (
+                              <span className="px-2 py-0.5 text-xs bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-300 rounded-full">
+                                {block.visibility_rules.device === 'mobile' ? 'Mobile Only' : 'Desktop Only'}
+                              </span>
+                            )}
+                            {block.visibility_rules.minTokens && (
+                              <span className="px-2 py-0.5 text-xs bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-300 rounded-full">
+                                Min {block.visibility_rules.minTokens} Tokens
+                              </span>
+                            )}
+                          </div>
                         )}
                       </div>
                     ))}

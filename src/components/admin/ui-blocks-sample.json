@@ -35,7 +35,8 @@
     "background_color": "#f8f9fa",
     "visibility_rules": {
       "minTokens": 100,
-      "requiresAuth": true
+      "requiresAuth": true,
+      "device": "desktop"
     }
   },
   {
@@ -63,7 +64,8 @@
     "background_color": "#f0f4f8",
     "visibility_rules": {
       "hasUsedAnyAnalyzer": true,
-      "minTokens": 50
+      "minTokens": 50,
+      "roles": ["user", "admin"]
     }
   },
   {
@@ -90,5 +92,33 @@
     "position": 6,
     "background_color": "#f0f9ff",
     "visibility_rules": {}
+  },
+  {
+    "title": "Mobile-Only Content",
+    "description": "This content only appears on mobile devices",
+    "block_type": "text",
+    "content": {
+      "text": "This block is optimized for mobile viewing and only appears on mobile devices.",
+      "textSize": "medium"
+    },
+    "position": 7,
+    "background_color": "#fff8f0",
+    "visibility_rules": {
+      "device": "mobile"
+    }
+  },
+  {
+    "title": "Desktop-Only Content",
+    "description": "This content only appears on desktop devices",
+    "block_type": "text",
+    "content": {
+      "text": "This block is optimized for desktop viewing and only appears on desktop devices.",
+      "textSize": "medium"
+    },
+    "position": 8,
+    "background_color": "#f0f8ff",
+    "visibility_rules": {
+      "device": "desktop"
+    }
   }
 ]

@@ -28,3 +28,45 @@
 .animate-slide-in-right {
   animation: slideInRight 0.5s ease-out;
 }
+
+/* Mobile-specific styles */
+@media (max-width: 768px) {
+  .mobile-layout .bg-white {
+    border-radius: 0.5rem;
+    margin-bottom: 1rem;
+  }
+  
+  .mobile-layout h3 {
+    font-size: 1.1rem;
+  }
+  
+  .mobile-layout p {
+    font-size: 0.9rem;
+  }
+  
+  /* Adjust padding for mobile */
+  .mobile-layout .p-6 {
+    padding: 1rem;
+  }
+  
+  /* Make buttons more tappable on mobile */
+  .mobile-layout button {
+    min-height: 44px;
+  }
+  
+  /* Adjust grid layouts for mobile */
+  .mobile-layout .grid-cols-2,
+  .mobile-layout .grid-cols-3 {
+    grid-template-columns: 1fr;
+  }
+  
+  /* Improve scrolling for horizontal layouts */
+  .mobile-layout .overflow-x-auto {
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none; /* Firefox */
+  }
+  
+  .mobile-layout .overflow-x-auto::-webkit-scrollbar {
+    display: none; /* Chrome, Safari, Edge */
+  }
+}

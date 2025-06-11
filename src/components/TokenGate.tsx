@@ -1,5 +1,6 @@
 import React, { ReactNode, useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
+import { isBlockVisible } from '../utils/visibility';
 
 interface TokenGateProps {
   children: ReactNode;
@@ -35,6 +36,7 @@ export const TokenGate: React.FC<TokenGateProps> = ({ children, rule }) => {
     // If no rule, always show content
     if (!rule || Object.keys(rule).length === 0) {
       setIsVisible(true);
+      setDataFetched(true);
       return;
     }
 
@@ -137,12 +139,21 @@ export const TokenGate: React.FC<TokenGateProps> = ({ children, rule }) => {
   }, [rule, userData, dataFetched]);
 
   // While data is being fetched, don't render anything to prevent flashing
-  if (!dataFetched && rule && Object.keys(rule).length > 0) {
+  if (!dataFetched) {
     return null;
   }
 
+  // Use the utility function for consistent visibility checking
+  const visibilityCheck = isBlockVisible({ visibility_rules: rule }, {
+    role: userData.isAuthenticated ? 'user' : null,
+    tokens: userData.tokenBalance,
+    usedAnalyzers: userData.usedAnalyzers,
+    joinedContests: userData.joinedContests,
+    isAuthenticated: userData.isAuthenticated
+  });
+
   // If visibility check fails, don't render the children
-  if (!isVisible) {
+  if (!visibilityCheck) {
     return null;
   }
   
