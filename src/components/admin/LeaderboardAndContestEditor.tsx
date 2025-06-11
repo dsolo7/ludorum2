@@ -1,19 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  Trophy, 
-  Users, 
-  Calendar, 
-  Coins, 
-  Target, 
-  Award, 
-  Save, 
-  X, 
-  Plus, 
-  Trash2, 
-  Brain,
-  Football,
-  BarChart2
-} from 'lucide-react';
+import { Trophy, Users, Calendar, Coins, Target, Award, Save, X, Plus, Trash2, Brain, FolderRoot as Football, BarChart2 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 
 interface Contest {
