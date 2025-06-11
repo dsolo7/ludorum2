@@ -791,7 +791,7 @@ const PageBuilder: React.FC = () => {
                           onChange={handleBlockInputChange}
                           rows={3}
                           className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white sm:text-sm font-mono"
-                          placeholder='{"requiresAuth": false, "roles": ["user"], "device": "mobile", "minTokens": 100}'
+                          placeholder='{"requiresAuth": false, "roles": ["user"], "device": "mobile", "minTokens": 100, "hasUsedAnalyzer": "model-id", "joinedContest": "contest-id", "hasJoinedAnyContest": true, "hasUsedAnyAnalyzer": true}'
                         />
                         <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                           Supported rules: requiresAuth, roles, device, minTokens, hasUsedAnalyzer, joinedContest, hasJoinedAnyContest, hasUsedAnyAnalyzer
@@ -892,23 +892,43 @@ const PageBuilder: React.FC = () => {
                         {Object.keys(block.visibility_rules || {}).length > 0 && (
                           <div className="mt-2 flex flex-wrap gap-1">
                             {block.visibility_rules.requiresAuth && (
-                              <span className="px-2 py-0.5 text-xs bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-300 rounded-full">
+                              <span className="px-2 py-0.5 text-xs bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-300 rounded-full whitespace-nowrap">
                                 Auth Required
                               </span>
                             )}
                             {block.visibility_rules.roles && (
-                              <span className="px-2 py-0.5 text-xs bg-purple-100 text-purple-800 dark:bg-purple-900/20 dark:text-purple-300 rounded-full">
+                              <span className="px-2 py-0.5 text-xs bg-purple-100 text-purple-800 dark:bg-purple-900/20 dark:text-purple-300 rounded-full whitespace-nowrap">
                                 Roles: {block.visibility_rules.roles.join(', ')}
                               </span>
                             )}
                             {block.visibility_rules.device && (
-                              <span className="px-2 py-0.5 text-xs bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-300 rounded-full">
+                              <span className="px-2 py-0.5 text-xs bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-300 rounded-full whitespace-nowrap">
                                 {block.visibility_rules.device === 'mobile' ? 'Mobile Only' : 'Desktop Only'}
                               </span>
                             )}
                             {block.visibility_rules.minTokens && (
-                              <span className="px-2 py-0.5 text-xs bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-300 rounded-full">
+                              <span className="px-2 py-0.5 text-xs bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-300 rounded-full whitespace-nowrap">
                                 Min {block.visibility_rules.minTokens} Tokens
+                              </span>
+                            )}
+                            {block.visibility_rules.hasUsedAnalyzer && (
+                              <span className="px-2 py-0.5 text-xs bg-indigo-100 text-indigo-800 dark:bg-indigo-900/20 dark:text-indigo-300 rounded-full whitespace-nowrap">
+                                Used Analyzer
+                              </span>
+                            )}
+                            {block.visibility_rules.joinedContest && (
+                              <span className="px-2 py-0.5 text-xs bg-pink-100 text-pink-800 dark:bg-pink-900/20 dark:text-pink-300 rounded-full whitespace-nowrap">
+                                Joined Contest
+                              </span>
+                            )}
+                            {block.visibility_rules.hasJoinedAnyContest && (
+                              <span className="px-2 py-0.5 text-xs bg-orange-100 text-orange-800 dark:bg-orange-900/20 dark:text-orange-300 rounded-full whitespace-nowrap">
+                                Any Contest
+                              </span>
+                            )}
+                            {block.visibility_rules.hasUsedAnyAnalyzer && (
+                              <span className="px-2 py-0.5 text-xs bg-teal-100 text-teal-800 dark:bg-teal-900/20 dark:text-teal-300 rounded-full whitespace-nowrap">
+                                Any Analyzer
                               </span>
                             )}
                           </div>
