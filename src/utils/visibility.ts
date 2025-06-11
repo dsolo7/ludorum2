@@ -12,7 +12,7 @@ export function isBlockVisible(block: any, user: any) {
   if (visibility.device === 'desktop' && isMobile()) return false;
 
   // Authentication requirement
-  if (visibility.requiresAuth && !user) return false;
+  if (visibility.requiresAuth && !user?.isAuthenticated) return false;
 
   // Check if user has used a specific analyzer
   if (visibility.hasUsedAnalyzer && 
@@ -68,7 +68,7 @@ export function checkBlockVisibility(block: any, user: any): { visible: boolean;
   }
 
   // Authentication requirement
-  if (visibility.requiresAuth && !user) {
+  if (visibility.requiresAuth && !user?.isAuthenticated) {
     return { visible: false, reason: 'authentication_required' };
   }
 
