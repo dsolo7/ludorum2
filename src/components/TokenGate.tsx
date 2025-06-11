@@ -1,5 +1,4 @@
-import React, { ReactNode } from 'react';
-import { useEffect, useState } from 'react';
+import React, { ReactNode, useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 
 interface TokenGateProps {
@@ -11,6 +10,7 @@ interface TokenGateProps {
     joinedContest?: string;
     hasJoinedAnyContest?: boolean;
     hasUsedAnyAnalyzer?: boolean;
+    loggedIn?: boolean; // Alias for requiresAuth for compatibility
   };
 }
 
@@ -29,6 +29,7 @@ export const TokenGate: React.FC<TokenGateProps> = ({ children, rule }) => {
     joinedContests: [],
     isAuthenticated: false
   });
+  const [dataFetched, setDataFetched] = useState(false);
 
   useEffect(() => {
     // If no rule, always show content
@@ -50,6 +51,7 @@ export const TokenGate: React.FC<TokenGateProps> = ({ children, rule }) => {
             joinedContests: [],
             isAuthenticated: false
           });
+          setDataFetched(true);
           return;
         }
         
@@ -79,8 +81,10 @@ export const TokenGate: React.FC<TokenGateProps> = ({ children, rule }) => {
           joinedContests: contestData?.map(item => item.contest_id) || [],
           isAuthenticated: true
         });
+        setDataFetched(true);
       } catch (error) {
         console.error('Error fetching user data for visibility check:', error);
+        setDataFetched(true);
       }
     };
 
@@ -88,13 +92,12 @@ export const TokenGate: React.FC<TokenGateProps> = ({ children, rule }) => {
   }, [rule]);
 
   useEffect(() => {
-    if (!rule) {
-      setIsVisible(true);
+    if (!rule || !dataFetched) {
       return;
     }
 
     // Check authentication requirement
-    if (rule.requiresAuth === true && !userData.isAuthenticated) {
+    if ((rule.requiresAuth === true || rule.loggedIn === true) && !userData.isAuthenticated) {
       setIsVisible(false);
       return;
     }
@@ -131,9 +134,18 @@ export const TokenGate: React.FC<TokenGateProps> = ({ children, rule }) => {
     
     // If all checks pass, show the content
     setIsVisible(true);
-  }, [rule, userData]);
+  }, [rule, userData, dataFetched]);
 
-  if (!isVisible) return null;
+  // While data is being fetched, don't render anything to prevent flashing
+  if (!dataFetched && rule && Object.keys(rule).length > 0) {
+    return null;
+  }
+
+  // If visibility check fails, don't render the children
+  if (!isVisible) {
+    return null;
+  }
   
+  // If visibility check passes, render the children
   return <>{children}</>;
 };
