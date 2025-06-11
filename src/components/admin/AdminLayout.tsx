@@ -38,6 +38,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
     { name: 'Content', icon: MessageSquareMore, href: '/admin/content' },
     { name: 'Gamification', icon: Gamepad2, href: '/admin/gamification' },
     { name: 'Page Builder', icon: Layout, href: '/admin/page-builder' },
+    { name: 'Page Layouts', icon: Layout, href: '/admin/page-layouts' },
     { name: 'Badge Definitions', icon: Trophy, href: '/admin/badge-definitions' },
     { name: 'Ads', icon: MonitorPlay, href: '/admin/ads' },
     { name: 'Ad Placements', icon: MapPin, href: '/admin/ad-placements' },

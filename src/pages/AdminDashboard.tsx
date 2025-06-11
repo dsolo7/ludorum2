@@ -23,6 +23,7 @@ import Leaderboard from '../components/admin/Leaderboard';
 import BadgeDefinitions from '../components/admin/BadgeDefinitions';
 import ContestManagement from '../components/admin/ContestManagement';
 import PageBuilder from '../components/admin/PageBuilder';
+import PageLayoutsEditor from '../components/admin/PageLayoutsEditor';
 
 const AdminDashboard: React.FC = () => {
   return (
@@ -47,6 +48,7 @@ const AdminDashboard: React.FC = () => {
         <Route path="badge-definitions" element={<BadgeDefinitions />} />
         <Route path="contest-management" element={<ContestManagement />} />
         <Route path="page-builder" element={<PageBuilder />} />
+        <Route path="page-layouts" element={<PageLayoutsEditor />} />
         <Route path="users" element={<Users />} />
         <Route path="audit-logs" element={<AuditLogs />} />
         <Route path="settings" element={<Settings />} />
