@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from "react";
 import { Trophy, Users, Calendar, Coins, Target, Award, Save, X, Plus, Trash2, Brain, FolderRoot as Football, BarChart2 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 
@@ -53,7 +53,7 @@ const LeaderboardAndContestEditor: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'contest' | 'predictions' | 'leaderboard'>('contest');
   const [newOption, setNewOption] = useState('');
   
-  useEffect(() => {
+  React.useEffect(() => {
     fetchDropdownData();
   }, []);
   
